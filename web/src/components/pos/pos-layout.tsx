@@ -12,7 +12,7 @@ import { syncPendingSales } from "@/lib/offline/sync";
 import { formatUSD } from "@/lib/utils";
 import { playBeep, playErrorBeep } from "@/lib/beep";
 import { getNextInvoiceNumber } from "@/lib/invoice";
-import { Check, CloudOff, History, RotateCcw, Pause, Play, Eye, X, Trash2, RefreshCw, DollarSign, User } from "lucide-react";
+import { Check, CloudOff, History, RotateCcw, Pause, Play, Eye, X, Trash2, RefreshCw, DollarSign, User, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BarcodeInput } from "./barcode-input";
 import { Numpad } from "./numpad";
@@ -57,6 +57,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const [returnCode, setReturnCode] = useState("");
   const [returnData, setReturnData] = useState<any>(null);
   const [showStockInfo, setShowStockInfo] = useState<Product | null>(null);
+  const [showProductSearch, setShowProductSearch] = useState(false);
 
   useEffect(() => {
     const rate = localStorage.getItem("bcv_rate");
@@ -561,7 +562,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           </button>
         </div>
 
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <ReceiptPanel
             onCheckout={() => setShowPayment(true)}
             currency={currency}
@@ -586,7 +587,14 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
         )}
 
         <div className="flex gap-2">
-          <div className="w-24 shrink-0">
+          <button
+            onClick={() => setShowProductSearch(true)}
+            className="rounded-xl border-2 border-border/60 px-3 py-3 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all flex items-center gap-1.5"
+          >
+            <Search className="h-4 w-4" />
+            Buscar
+          </button>
+          <div className="w-20 shrink-0">
             <Numpad quantity={quantity} onChange={setQuantity} />
           </div>
           <button
@@ -597,6 +605,26 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           </button>
         </div>
       </div>
+
+      {/* Mobile product search modal */}
+      {showProductSearch && (
+        <div className="fixed inset-0 z-50 bg-background md:hidden flex flex-col animate-in slide-in-from-bottom">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+            <h2 className="text-sm font-bold">Buscar Productos</h2>
+            <button onClick={() => setShowProductSearch(false)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <ProductPanel
+              products={products}
+              quantity={quantity}
+              priceTier={priceTier}
+              onProductInfo={handleProductInfo}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Sale History Modal */}
       {showHistory && (
