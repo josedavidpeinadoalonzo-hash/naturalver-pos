@@ -31,6 +31,7 @@ function ProductEditPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!isNew);
   const [showScanner, setShowScanner] = useState(false);
+  const [ivaPercent, setIvaPercent] = useState(16);
   const [duplicateWarn, setDuplicateWarn] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const barcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,6 +40,7 @@ function ProductEditPage() {
   const barcodeRef = useRef("");
 
   useEffect(() => {
+    loadIvaPercent();
     if (isNew) {
       addPresentation();
       setTimeout(() => barcodeInputRef.current?.focus(), 100);
@@ -46,6 +48,19 @@ function ProductEditPage() {
       loadProduct();
     }
   }, [params.id]);
+
+  async function loadIvaPercent() {
+    try {
+      const bid = await getTenantBusinessId();
+      const { data } = await supabase
+        .from("business_config")
+        .select("value")
+        .eq("business_id", bid)
+        .eq("key", "iva_percent")
+        .single();
+      if (data?.value) setIvaPercent(Number(data.value));
+    } catch {}
+  }
 
   async function checkDuplicate(code: string) {
     if (!code.trim()) return;
@@ -83,7 +98,16 @@ function ProductEditPage() {
         setBarcode(p.barcode || "");
         setImageUrl(p.image_url || "");
         setExchangeRateCop(p.exchangeRateCop || 0);
-        setPresentations(p.presentations);
+        setPresentations(p.presentations.map((pr) => {
+          if (pr.exento || ivaPercent === 0) return pr;
+          return {
+            ...pr,
+            priceUSD: pr.priceUSD * (1 + ivaPercent / 100),
+            wholesalePrice: pr.wholesalePrice ? pr.wholesalePrice * (1 + ivaPercent / 100) : undefined,
+            pricePremium: pr.pricePremium ? pr.pricePremium * (1 + ivaPercent / 100) : undefined,
+            priceDistributor: pr.priceDistributor ? pr.priceDistributor * (1 + ivaPercent / 100) : undefined,
+          };
+        }));
         setQuantity(p.presentations[0]?.stock || 0);
       }
     } catch (err) {
@@ -119,6 +143,18 @@ function ProductEditPage() {
     setErrorMsg("");
     setSaving(true);
     try {
+      const savedPresentations = presentations.map((p) => {
+        if (p.exento || ivaPercent === 0) return p;
+        const factor = 1 + ivaPercent / 100;
+        return {
+          ...p,
+          priceUSD: p.priceUSD / factor,
+          wholesalePrice: p.wholesalePrice ? p.wholesalePrice / factor : undefined,
+          pricePremium: p.pricePremium ? p.pricePremium / factor : undefined,
+          priceDistributor: p.priceDistributor ? p.priceDistributor / factor : undefined,
+        };
+      });
+
       const product = {
         name: name.trim(),
         category: category.trim() || "General",
@@ -126,7 +162,7 @@ function ProductEditPage() {
         image_url: imageUrl || null,
         barcode: barcode.trim() || null,
         exchange_rate_cop: exchangeRateCop || 0,
-        presentations,
+        presentations: savedPresentations,
         updated_at: new Date().toISOString(),
       };
 
@@ -374,7 +410,7 @@ function ProductEditPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <PriceInput
-                        label="Precio USD"
+                        label={p.exento ? "Precio USD (Exento)" : `Precio Final (IVA ${ivaPercent}% incluido)`}
                         currency="USD"
                         value={p.priceUSD || ""}
                         onChange={(e) => updatePresentation(p.id, "priceUSD", Number(e.target.value))}

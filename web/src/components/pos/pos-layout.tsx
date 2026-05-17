@@ -71,15 +71,10 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
     );
   }, [products, mobileQuery]);
 
-  function basePrice(pres: Product["presentations"][0]): number {
-    if (pres.exento || ivaPercent === 0) return pres.priceUSD;
-    return pres.priceUSD / (1 + ivaPercent / 100);
-  }
-
   const ivaAmount = useMemo(() => {
     const taxable = items
       .filter(i => !i.presentation.exento)
-      .reduce((s, i) => s + Math.max(0, basePrice(i.presentation) - (i.discount || 0)) * i.quantity, 0);
+      .reduce((s, i) => s + Math.max(0, i.presentation.priceUSD - (i.discount || 0)) * i.quantity, 0);
     return (taxable * ivaPercent) / 100;
   }, [items, ivaPercent]);
 
@@ -288,10 +283,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
     let exemptTotal = 0;
 
     for (const item of items) {
-      const itemBase = item.presentation.exento || ivaPercent === 0
-        ? item.presentation.priceUSD
-        : item.presentation.priceUSD / (1 + ivaPercent / 100);
-      const unitPrice = itemBase - (item.discount || 0);
+      const unitPrice = item.presentation.priceUSD - (item.discount || 0);
       const lineTotal = Math.max(0, unitPrice) * item.quantity;
       if (item.presentation.exento) {
         exemptTotal += lineTotal;
@@ -368,14 +360,11 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           buyerRif: rifCliente || "V-00000000-0",
           buyerName: payment.customerName || "Consumidor Final",
           items: items.map((i) => {
-            const iBase = i.presentation.exento || ivaRate === 0
-              ? i.presentation.priceUSD
-              : i.presentation.priceUSD / (1 + ivaRate / 100);
-            const iEff = iBase - (i.discount || 0);
+            const iEff = i.presentation.priceUSD - (i.discount || 0);
             return {
               description: i.product.name,
               quantity: i.quantity,
-              unitPrice: iBase,
+              unitPrice: i.presentation.priceUSD,
               exemptAmount: i.presentation.exento ? iEff * i.quantity : 0,
               taxableAmount: i.presentation.exento ? 0 : iEff * i.quantity,
               ivaAmount: i.presentation.exento ? 0 : (iEff * i.quantity * ivaRate) / 100,
@@ -637,7 +626,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
                   <div className="space-y-1">
                     {mobileResults.map((p) => {
                       const pres = p.presentations[0];
-                      const price = pres ? formatUSD(basePrice(pres)) : "";
+                      const price = pres ? formatUSD(pres.priceUSD) : "";
                       return (
                         <button
                           key={p.id}
