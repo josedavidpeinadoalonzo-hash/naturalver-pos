@@ -23,15 +23,6 @@ export function EmployeeLogin() {
     );
   }
 
-  if (employees.length === 0) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="mt-4 text-sm text-muted-foreground">Cargando...</p>
-      </div>
-    );
-  }
-
   function handleDigit(d: string) {
     if (pin.length >= 4) return;
     const next = pin + d;

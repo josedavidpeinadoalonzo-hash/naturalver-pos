@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 export interface Business {
@@ -53,16 +53,16 @@ export function BusinessProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("business", JSON.stringify(b));
   }, []);
 
+  const ctx = useMemo(() => ({
+    business,
+    businesses,
+    setBusiness,
+    loadBusinesses,
+    businessId: business?.id || null,
+  }), [business, businesses, setBusiness, loadBusinesses]);
+
   return (
-    <BusinessContext.Provider
-      value={{
-        business,
-        businesses,
-        setBusiness,
-        loadBusinesses,
-        businessId: business?.id || null,
-      }}
-    >
+    <BusinessContext.Provider value={ctx}>
       {children}
     </BusinessContext.Provider>
   );

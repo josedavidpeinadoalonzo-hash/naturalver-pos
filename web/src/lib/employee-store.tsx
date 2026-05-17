@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useBusiness } from "@/lib/business-store";
 
@@ -34,7 +34,7 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
   const [employeesLoaded, setEmployeesLoaded] = useState(false);
 
   const loadEmployees = useCallback(async () => {
-    if (!businessId) return;
+    if (!businessId) { setEmployeesLoaded(true); return; }
     const { data } = await supabase
       .from("employees")
       .select("*")
@@ -93,8 +93,12 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
     await loadEmployees();
   }, [loadEmployees]);
 
+  const ctx = useMemo(() => ({
+    employee, employees, employeesLoaded, login, logout, loadEmployees, saveEmployee, deleteEmployee
+  }), [employee, employees, employeesLoaded, login, logout, loadEmployees, saveEmployee, deleteEmployee]);
+
   return (
-    <EmployeeContext.Provider value={{ employee, employees, employeesLoaded, login, logout, loadEmployees, saveEmployee, deleteEmployee }}>
+    <EmployeeContext.Provider value={ctx}>
       {children}
     </EmployeeContext.Provider>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { EmployeeProvider, useEmployee } from "@/lib/employee-store";
 import { useBusiness } from "@/lib/business-store";
 import { EmployeeLogin } from "./employee-login";
@@ -10,10 +11,12 @@ function GateInner({ children }: { children: React.ReactNode }) {
   const { employee } = useEmployee();
   const { business, setBusiness } = useBusiness();
 
+  useEffect(() => {
+    if (business?.id) setTenantBusinessId(business.id);
+  }, [business?.id]);
+
   if (!business) return <BusinessLogin />;
   if (!employee) return <EmployeeLogin />;
-
-  setTenantBusinessId(business.id);
 
   return (
     <>
