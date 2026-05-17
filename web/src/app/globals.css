@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-background: #F8FAF7;
+  --color-foreground: #17231C;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #17231C;
+  --color-primary: #2E7D32;
+  --color-primary-foreground: #FFFFFF;
+  --color-muted: #6B7A70;
+  --color-muted-foreground: #6B7A70;
+  --color-border: #DCE7DE;
+  --color-accent: #F2B705;
+  --color-danger: #C62828;
+  --color-success: #1B8A4B;
+  --color-warning: #B26A00;
+}
+
+.dark {
+  --color-background: #0E1511;
+  --color-foreground: #F3F8F4;
+  --color-card: #17231C;
+  --color-card-foreground: #F3F8F4;
+  --color-primary: #79C47F;
+  --color-primary-foreground: #0E1511;
+  --color-muted: #9AA89F;
+  --color-muted-foreground: #9AA89F;
+  --color-border: #2D3A32;
+  --color-accent: #FFD45E;
+  --color-danger: #FF8A80;
+  --color-success: #58D68D;
+  --color-warning: #F5B041;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input, textarea, select, button {
+  font-family: inherit;
+}
+
+@media (max-width: 767px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .hide-desktop {
+    display: none !important;
+  }
+}
