@@ -385,6 +385,18 @@ function ProductEditPage() {
                         value={p.priceBs || ""}
                         onChange={(e) => updatePresentation(p.id, "priceBs", Number(e.target.value))}
                       />
+                      <div className="col-span-2 flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2">
+                        <input
+                          type="checkbox"
+                          id={`exento-${p.id}`}
+                          checked={p.exento || false}
+                          onChange={(e) => updatePresentation(p.id, "exento", e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <label htmlFor={`exento-${p.id}`} className="text-xs font-medium text-muted-foreground cursor-pointer select-none">
+                          Exento de IVA
+                        </label>
+                      </div>
                       <div>
                         <label className="text-xs font-medium text-muted-foreground">Precio COP</label>
                         <input

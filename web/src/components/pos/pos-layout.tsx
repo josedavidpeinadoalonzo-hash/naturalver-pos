@@ -42,7 +42,8 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const { business } = useBusiness();
   const [quantity, setQuantity] = useState(1);
   const [priceTier, setPriceTier] = useState<PriceTier>("P1");
-  const [currency, setCurrency] = useState<CurrencyCode>("USD");
+  const [currency, setCurrency] = useState<CurrencyCode>("VES");
+  const [ivaPercent, setIvaPercent] = useState(16);
   const [copRate, setCopRate] = useState(0);
   const [showScanner, setShowScanner] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
@@ -64,7 +65,21 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
     if (cop) setCopRate(Number(cop));
     syncPendingSales();
     loadHeldSales();
+    loadIvaPercent();
   }, []);
+
+  async function loadIvaPercent() {
+    try {
+      const bid = await getTenantBusinessId();
+      const { data } = await supabase
+        .from("business_config")
+        .select("value")
+        .eq("business_id", bid)
+        .eq("key", "iva_percent")
+        .single();
+      if (data?.value) setIvaPercent(Number(data.value));
+    } catch {}
+  }
 
   function loadHeldSales() {
     try {
@@ -235,11 +250,24 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
       invoiceNumber = await getNextInvoiceNumber();
       const { generateControlNumber } = await import("@/lib/models/invoice");
       controlNumber = generateControlNumber(invoiceNumber, totalUSD);
+      localStorage.setItem("last_invoice_number", invoiceNumber);
+      localStorage.setItem("last_control_number", controlNumber!);
+    } else {
+      localStorage.removeItem("last_invoice_number");
+      localStorage.removeItem("last_control_number");
     }
+
+    let taxableTotal = 0;
+    let exemptTotal = 0;
 
     for (const item of items) {
       const unitPrice = item.presentation.priceUSD - (item.discount || 0);
       const lineTotal = Math.max(0, unitPrice) * item.quantity;
+      if (item.presentation.exento) {
+        exemptTotal += lineTotal;
+      } else {
+        taxableTotal += lineTotal;
+      }
       const record: Record<string, any> = {
         product_id: item.product.id,
         product_name: item.product.name,
@@ -286,6 +314,48 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           })
           .eq("id", item.product.id);
       }
+    }
+
+    if (payment.generateInvoice && invoiceNumber && controlNumber && navigator.onLine) {
+      try {
+        const bid = await getTenantBusinessId();
+        const { data: config } = await supabase
+          .from("business_config")
+          .select("value")
+          .eq("business_id", bid)
+          .eq("key", "iva_percent")
+          .single();
+        const ivaRate = Number(config?.value || 16);
+        const ivaAmount = (taxableTotal * ivaRate) / 100;
+        const { submitToSENIAT } = await import("@/lib/seniat/api");
+        await submitToSENIAT({
+          invoiceNumber,
+          controlNumber,
+          documentType: "01",
+          issueDate: new Date().toISOString().split("T")[0],
+          sellerRif: localStorage.getItem("business_rif") || "",
+          sellerName: localStorage.getItem("business_name") || "",
+          buyerRif: rifCliente || "V-00000000-0",
+          buyerName: payment.customerName || "Consumidor Final",
+          items: items.map((i) => ({
+            description: i.product.name,
+            quantity: i.quantity,
+            unitPrice: i.presentation.priceUSD,
+            exemptAmount: i.presentation.exento ? (i.presentation.priceUSD - (i.discount || 0)) * i.quantity : 0,
+            taxableAmount: i.presentation.exento ? 0 : (i.presentation.priceUSD - (i.discount || 0)) * i.quantity,
+            ivaAmount: i.presentation.exento ? 0 : ((i.presentation.priceUSD - (i.discount || 0)) * i.quantity * ivaRate) / 100,
+            totalAmount: (i.presentation.priceUSD - (i.discount || 0)) * i.quantity,
+          })),
+          subtotal: totalUSD,
+          exemptAmount: exemptTotal,
+          taxableAmount: taxableTotal,
+          ivaRate,
+          ivaAmount,
+          totalAmount: totalUSD,
+          exchangeRate,
+          currency: "USD",
+        });
+      } catch {}
     }
 
     setConfirmed(true);
@@ -367,7 +437,12 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
         <div className="flex flex-1 gap-3 min-h-0">
           {/* Left: Receipt */}
           <div className="w-[45%] shrink-0">
-            <ReceiptPanel onCheckout={() => setShowPayment(true)} />
+            <ReceiptPanel
+              onCheckout={() => setShowPayment(true)}
+              currency={currency}
+              ivaPercent={ivaPercent}
+              exchangeRate={exchangeRate}
+            />
           </div>
 
           {/* Right: Scanner + Products */}
@@ -487,7 +562,12 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
         </div>
 
         <div className="flex-1 min-h-0">
-          <ReceiptPanel onCheckout={() => setShowPayment(true)} />
+          <ReceiptPanel
+            onCheckout={() => setShowPayment(true)}
+            currency={currency}
+            ivaPercent={ivaPercent}
+            exchangeRate={exchangeRate}
+          />
         </div>
 
         {heldSales.length > 0 && (

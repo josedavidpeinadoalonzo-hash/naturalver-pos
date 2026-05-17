@@ -10,6 +10,7 @@ export interface ProductPresentation {
   resellerPrice?: number;
   pricePremium?: number;
   priceDistributor?: number;
+  exento?: boolean;
 }
 
 export interface Product {

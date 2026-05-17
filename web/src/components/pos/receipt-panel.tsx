@@ -2,49 +2,91 @@
 
 import { useState } from "react";
 import { useCart } from "@/lib/cart-store";
-import { formatUSD } from "@/lib/utils";
+import { formatUSD, formatBs } from "@/lib/utils";
 import { Trash2, Minus, Plus, ShoppingCart, Printer, Percent, Receipt } from "lucide-react";
+import type { CurrencyCode } from "./currency-selector";
+import { formatByCurrency } from "./currency-selector";
 
 interface ReceiptPanelProps {
   onCheckout: () => void;
+  currency?: CurrencyCode;
+  ivaPercent?: number;
+  exchangeRate?: number;
 }
 
-export function ReceiptPanel({ onCheckout }: ReceiptPanelProps) {
+export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exchangeRate = 0 }: ReceiptPanelProps) {
   const { items, updateQuantity, removeItem, totalUSD, totalItems, setItemDiscount, globalDiscount, setGlobalDiscount } = useCart();
   const [discountTarget, setDiscountTarget] = useState<{ idx: number } | null>(null);
 
-  function itemLineTotal(item: typeof items[0]) {
-    const unitPrice = item.presentation.priceUSD - (item.discount || 0);
-    return Math.max(0, unitPrice) * item.quantity;
+  const rate = currency === "VES" ? exchangeRate : currency === "COP" ? (() => { try { return Number(localStorage.getItem("cop_rate") || "0"); } catch { return 0; } })() : 1;
+
+  function itemEffectivePrice(item: typeof items[0]): number {
+    return item.presentation.priceUSD - (item.discount || 0);
   }
 
-  function subtotal() {
+  function itemLineTotal(item: typeof items[0]): number {
+    return Math.max(0, itemEffectivePrice(item)) * item.quantity;
+  }
+
+  function subtotal(): number {
     return items.reduce((s, i) => s + i.presentation.priceUSD * i.quantity, 0);
+  }
+
+  function fmt(usd: number): string {
+    return formatByCurrency(usd, currency, exchangeRate, rate);
+  }
+
+  function taxableSubtotal(): number {
+    return items
+      .filter((i) => !i.presentation.exento)
+      .reduce((s, i) => s + i.presentation.priceUSD * i.quantity, 0);
+  }
+
+  function ivaAmount(): number {
+    const taxable = items
+      .filter((i) => !i.presentation.exento)
+      .reduce((s, i) => s + Math.max(0, itemEffectivePrice(i)) * i.quantity, 0);
+    return (taxable * ivaPercent) / 100;
   }
 
   function handlePrint() {
     const businessName = localStorage.getItem("business_name") || "Distribuidora DC";
+    const businessRif = localStorage.getItem("business_rif") || "";
+    const invoiceNumber = localStorage.getItem("last_invoice_number") || "";
+    const controlNumber = localStorage.getItem("last_control_number") || "";
     const lines: string[] = [];
     lines.push("=".repeat(32));
     lines.push(`       ${businessName}`);
     lines.push("=".repeat(32));
+    if (businessRif) lines.push(`  RIF: ${businessRif}`);
     lines.push("");
     items.forEach((item) => {
-      const unitPrice = item.presentation.priceUSD - (item.discount || 0);
+      const unitPrice = itemEffectivePrice(item);
       const total = unitPrice * item.quantity;
-      lines.push(`${item.product.name}`);
-      lines.push(`  ${item.quantity} x $${unitPrice.toFixed(2)}   $${total.toFixed(2)}`);
+      const exento = item.presentation.exento ? " (E)" : "";
+      lines.push(`${item.product.name}${exento}`);
+      lines.push(`  ${item.quantity} x ${fmt(unitPrice)}   ${fmt(total)}`);
       if (item.discount) {
-        lines.push(`  Desc item: -$${(item.discount * item.quantity).toFixed(2)}`);
+        lines.push(`  Desc item: -${fmt(item.discount * item.quantity)}`);
       }
     });
     lines.push("");
     lines.push("-".repeat(32));
-    lines.push(`Subtotal:      $${subtotal().toFixed(2)}`);
-    if (globalDiscount > 0) {
-      lines.push(`Desc total:   -$${globalDiscount.toFixed(2)}`);
+    lines.push(`Subtotal:      ${fmt(subtotal())}`);
+    const tax = ivaAmount();
+    if (tax > 0) {
+      lines.push(`IVA (${ivaPercent}%):    ${fmt(tax)}`);
     }
-    lines.push(`TOTAL:         $${totalUSD.toFixed(2)}`);
+    if (globalDiscount > 0) {
+      lines.push(`Desc total:   -${fmt(globalDiscount)}`);
+    }
+    lines.push(`TOTAL:         ${fmt(totalUSD)}`);
+    if (invoiceNumber) {
+      lines.push("-".repeat(32));
+      lines.push(`Factura N°: ${invoiceNumber}`);
+      lines.push(`Control:     ${controlNumber}`);
+      lines.push(`AUTORIZADO SENIAT`);
+    }
     lines.push("-".repeat(32));
     lines.push(new Date().toLocaleString());
     lines.push("=".repeat(32));
@@ -110,10 +152,13 @@ export function ReceiptPanel({ onCheckout }: ReceiptPanelProps) {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{item.product.name}</p>
+                      <p className="text-sm font-semibold truncate">
+                        {item.product.name}
+                        {item.presentation.exento && <span className="text-[10px] text-muted-foreground ml-1 font-normal">(E)</span>}
+                      </p>
                       <p className="text-[11px] font-mono text-muted-foreground">
-                        {item.presentation.name} · ${unitPrice.toFixed(2)}
-                        {discount > 0 && <span className="text-success ml-1">(-${discount.toFixed(2)})</span>}
+                        {item.presentation.name} · {fmt(unitPrice)}
+                        {discount > 0 && <span className="text-success ml-1">(-{fmt(discount)})</span>}
                       </p>
                     </div>
                     <div className="flex items-center gap-0.5">
@@ -148,7 +193,7 @@ export function ReceiptPanel({ onCheckout }: ReceiptPanelProps) {
                         <Plus className="h-3 w-3" />
                       </button>
                     </div>
-                    <span className="text-sm font-bold tabular-nums font-mono">{formatUSD(lineTotal)}</span>
+                    <span className="text-sm font-bold tabular-nums font-mono">{fmt(lineTotal)}</span>
                   </div>
 
                   {discountTarget?.idx === idx && (
@@ -182,8 +227,19 @@ export function ReceiptPanel({ onCheckout }: ReceiptPanelProps) {
         <div className="border-t-2 border-dashed border-border/60 bg-gradient-to-b from-muted/5 to-card px-4 py-3 space-y-2.5">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>Subtotal</span>
-            <span className="tabular-nums font-mono font-medium">{formatUSD(subtotal())}</span>
+            <span className="tabular-nums font-mono font-medium">{fmt(subtotal())}</span>
           </div>
+
+          {ivaPercent > 0 && (() => {
+            const tax = ivaAmount();
+            if (tax <= 0) return null;
+            return (
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>IVA ({ivaPercent}%)</span>
+                <span className="tabular-nums font-mono font-medium">{fmt(tax)}</span>
+              </div>
+            );
+          })()}
 
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-1.5">
@@ -205,10 +261,10 @@ export function ReceiptPanel({ onCheckout }: ReceiptPanelProps) {
                   onChange={(e) => setGlobalDiscount(Number(e.target.value) || 0)}
                   className="w-22 rounded-lg border-2 border-border/60 bg-background px-2 py-1 text-right text-xs font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 tabular-nums"
                 />
-                <span className="text-success text-sm font-semibold">-{formatUSD(globalDiscount)}</span>
+                <span className="text-success text-sm font-semibold">-{fmt(globalDiscount)}</span>
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground font-mono">$0.00</span>
+              <span className="text-xs text-muted-foreground font-mono">{currency === "USD" ? "$0.00" : "Bs 0,00"}</span>
             )}
           </div>
 
@@ -216,14 +272,14 @@ export function ReceiptPanel({ onCheckout }: ReceiptPanelProps) {
 
           <div className="flex items-center justify-between">
             <span className="text-base font-bold">TOTAL</span>
-            <span className="text-xl font-bold tabular-nums font-mono text-primary">{formatUSD(totalUSD)}</span>
+            <span className="text-xl font-bold tabular-nums font-mono text-primary">{fmt(totalUSD)}</span>
           </div>
 
           <button
             onClick={onCheckout}
             className="w-full rounded-xl bg-gradient-to-r from-primary to-primary/90 py-3.5 text-sm font-bold text-primary-foreground shadow-lg hover:shadow-xl hover:opacity-95 active:scale-[0.98] transition-all"
           >
-            Cobrar {formatUSD(totalUSD)}
+            Cobrar {fmt(totalUSD)}
           </button>
         </div>
       )}
