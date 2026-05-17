@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import type { Product } from "@/lib/models";
 import { useCart } from "@/lib/cart-store";
 import { supabase } from "@/lib/supabase/client";
@@ -58,6 +58,15 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const [returnData, setReturnData] = useState<any>(null);
   const [showStockInfo, setShowStockInfo] = useState<Product | null>(null);
   const [showProductSearch, setShowProductSearch] = useState(false);
+
+  const ivaAmount = useMemo(() => {
+    const taxable = items
+      .filter(i => !i.presentation.exento)
+      .reduce((s, i) => s + Math.max(0, i.presentation.priceUSD - (i.discount || 0)) * i.quantity, 0);
+    return (taxable * ivaPercent) / 100;
+  }, [items, ivaPercent]);
+
+  const totalWithIVA = totalUSD + ivaAmount;
 
   useEffect(() => {
     const rate = localStorage.getItem("bcv_rate");
@@ -379,7 +388,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
             Se sincronizará cuando tengas conexión
           </div>
         )}
-        <p className="text-lg font-bold">{formatUSD(totalUSD)}</p>
+        <p className="text-lg font-bold">{formatUSD(totalWithIVA)}</p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => {
             setConfirmed(false);
@@ -443,6 +452,8 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
               currency={currency}
               ivaPercent={ivaPercent}
               exchangeRate={exchangeRate}
+              ivaAmount={ivaAmount}
+              totalWithIVA={totalWithIVA}
             />
           </div>
 
@@ -568,6 +579,8 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
             currency={currency}
             ivaPercent={ivaPercent}
             exchangeRate={exchangeRate}
+            ivaAmount={ivaAmount}
+            totalWithIVA={totalWithIVA}
           />
         </div>
 
@@ -601,7 +614,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
             onClick={() => setShowPayment(true)}
             className="flex-1 rounded-xl bg-gradient-to-r from-primary to-primary/90 px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:shadow-xl hover:opacity-95 active:scale-[0.98] transition-all"
           >
-            Cobrar {formatUSD(totalUSD)}
+            Cobrar {formatUSD(totalWithIVA)}
           </button>
         </div>
       </div>
@@ -762,6 +775,8 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           cashDiscount={cashDiscount}
           onConfirm={handleConfirm}
           onClose={() => setShowPayment(false)}
+          totalWithIVA={totalWithIVA}
+          ivaAmount={ivaAmount}
         />
       )}
     </>

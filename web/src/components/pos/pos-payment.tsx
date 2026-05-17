@@ -13,6 +13,8 @@ interface PosPaymentProps {
   cashDiscount?: number;
   onConfirm: (data: PosPaymentData) => Promise<void>;
   onClose: () => void;
+  totalWithIVA?: number;
+  ivaAmount?: number;
 }
 
 export interface PosPaymentData {
@@ -35,11 +37,12 @@ const PAYMENT_OPTIONS = [
   { type: "mixed" as const, label: "Mixto", icon: Shuffle, color: "from-orange-500 to-orange-600" },
 ];
 
-export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose }: PosPaymentProps) {
+export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose, totalWithIVA, ivaAmount }: PosPaymentProps) {
   const { totalUSD, clearCart } = useCart();
+  const effectiveTotal = totalWithIVA !== undefined ? totalWithIVA : totalUSD;
   const [paymentType, setPaymentType] = useState<"cash" | "mobile" | "pos" | "mixed">("cash");
-  const [cashReceived, setCashReceived] = useState(totalUSD);
-  const [mobileBS, setMobileBS] = useState(totalUSD * exchangeRate);
+  const [cashReceived, setCashReceived] = useState(effectiveTotal);
+  const [mobileBS, setMobileBS] = useState(effectiveTotal * exchangeRate);
   const [customerName, setCustomerName] = useState("");
   const [customerRif, setCustomerRif] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -81,7 +84,7 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose 
   }
 
   const discount = paymentType === "cash" ? (cashDiscount || 0) : 0;
-  const finalUSD = Math.max(0, totalUSD - discount);
+  const finalUSD = Math.max(0, effectiveTotal - discount);
   const totalBS = finalUSD * exchangeRate;
   const change = Math.max(0, cashReceived - finalUSD);
 
@@ -136,6 +139,11 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose 
           <div className="rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 p-5 text-center">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Total a cobrar</p>
             <p className="text-4xl font-bold tabular-nums tracking-tight">{formatUSD(finalUSD)}</p>
+            {ivaAmount !== undefined && ivaAmount > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Base: {formatUSD(finalUSD - ivaAmount)} + IVA: {formatUSD(ivaAmount)}
+              </p>
+            )}
             {exchangeRate > 0 && (
               <p className="text-sm text-muted-foreground mt-1.5 font-medium">
                 Bs. {formatBs(totalBS)} <span className="text-xs text-muted-foreground/60">@ {exchangeRate.toFixed(2)}</span>

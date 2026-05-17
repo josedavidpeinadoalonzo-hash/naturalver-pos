@@ -12,9 +12,11 @@ interface ReceiptPanelProps {
   currency?: CurrencyCode;
   ivaPercent?: number;
   exchangeRate?: number;
+  totalWithIVA?: number;
+  ivaAmount?: number;
 }
 
-export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exchangeRate = 0 }: ReceiptPanelProps) {
+export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exchangeRate = 0, totalWithIVA, ivaAmount: ivaAmt }: ReceiptPanelProps) {
   const { items, updateQuantity, removeItem, totalUSD, totalItems, setItemDiscount, globalDiscount, setGlobalDiscount } = useCart();
   const [discountTarget, setDiscountTarget] = useState<{ idx: number } | null>(null);
 
@@ -107,8 +109,8 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
   }
 
   return (
-    <div className="flex h-full flex-col bg-gradient-to-b from-card to-gray-50/50 rounded-xl border border-border/60 shadow-sm overflow-hidden">
-      <div className="border-b border-dashed border-border/60 bg-gradient-to-r from-primary/5 to-transparent px-4 py-3">
+    <div className="flex h-full flex-col bg-[#f8f8f8] rounded-xl border border-gray-200 overflow-hidden">
+      <div className="border-b border-gray-200 bg-white px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="rounded-lg bg-primary/10 p-1.5">
@@ -117,11 +119,11 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
             <span className="text-sm font-bold tracking-wider">RECIBO</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground bg-muted/20 rounded-full px-2 py-0.5">
+            <span className="text-xs font-medium text-muted-foreground bg-gray-100 rounded-full px-2 py-0.5">
               {totalItems} items
             </span>
             {items.length > 0 && (
-              <button onClick={handlePrint} className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted/20 transition-all" title="Imprimir ticket">
+              <button onClick={handlePrint} className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-gray-100 transition-all" title="Imprimir ticket">
                 <Printer className="h-4 w-4" />
               </button>
             )}
@@ -129,17 +131,17 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-[repeating-linear-gradient(0deg,transparent,transparent_20px,#f9fafb_20px,#f9fafb_21px)]">
+      <div className="flex-1 overflow-y-auto bg-white">
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-16 text-center px-4">
-            <div className="rounded-full bg-muted/20 p-4 mb-4">
-              <ShoppingCart className="h-10 w-10 text-muted-foreground/30" />
+            <div className="rounded-full bg-gray-100 p-4 mb-4">
+              <ShoppingCart className="h-10 w-10 text-gray-300" />
             </div>
             <p className="text-sm font-medium text-muted-foreground">Carrito vacío</p>
             <p className="text-xs text-muted-foreground/50 mt-1">Escanea o selecciona productos</p>
           </div>
         ) : (
-          <div className="divide-y divide-dashed divide-border/40">
+          <div className="divide-y divide-gray-100">
             {items.map((item, idx) => {
               const discount = item.discount || 0;
               const unitPrice = item.presentation.priceUSD;
@@ -148,7 +150,7 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
               return (
                 <div
                   key={`${item.product.id}-${item.presentation.id}`}
-                  className="px-3 py-2.5 hover:bg-primary/5 transition-colors animate-in slide-in-from-bottom-2"
+                  className="px-3 py-2.5 hover:bg-gray-50 transition-colors animate-in slide-in-from-bottom-2"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -224,22 +226,18 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
       </div>
 
       {items.length > 0 && (
-        <div className="border-t-2 border-dashed border-border/60 bg-gradient-to-b from-muted/5 to-card px-4 py-3 space-y-2.5">
+        <div className="border-t border-gray-200 bg-white px-4 py-3 space-y-2.5">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>Subtotal</span>
             <span className="tabular-nums font-mono font-medium">{fmt(subtotal())}</span>
           </div>
 
-          {ivaPercent > 0 && (() => {
-            const tax = ivaAmount();
-            if (tax <= 0) return null;
-            return (
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>IVA ({ivaPercent}%)</span>
-                <span className="tabular-nums font-mono font-medium">{fmt(tax)}</span>
-              </div>
-            );
-          })()}
+          {ivaPercent > 0 && ivaAmt !== undefined && ivaAmt > 0 && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>IVA ({ivaPercent}%)</span>
+              <span className="tabular-nums font-mono font-medium">{fmt(ivaAmt)}</span>
+            </div>
+          )}
 
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-1.5">
@@ -268,18 +266,20 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
             )}
           </div>
 
-          <div className="border-t border-dashed border-border/40 pt-2" />
+          <div className="border-t border-border/30 pt-2" />
 
           <div className="flex items-center justify-between">
             <span className="text-base font-bold">TOTAL</span>
-            <span className="text-xl font-bold tabular-nums font-mono text-primary">{fmt(totalUSD)}</span>
+            <span className="text-xl font-bold tabular-nums font-mono text-primary">
+              {totalWithIVA !== undefined ? fmt(totalWithIVA) : fmt(totalUSD)}
+            </span>
           </div>
 
           <button
             onClick={onCheckout}
-            className="w-full rounded-xl bg-gradient-to-r from-primary to-primary/90 py-3.5 text-sm font-bold text-primary-foreground shadow-lg hover:shadow-xl hover:opacity-95 active:scale-[0.98] transition-all"
+            className="w-full rounded-xl bg-primary py-3.5 text-sm font-bold text-primary-foreground shadow hover:opacity-90 active:scale-[0.98] transition-all"
           >
-            Cobrar {fmt(totalUSD)}
+            Cobrar {totalWithIVA !== undefined ? fmt(totalWithIVA) : fmt(totalUSD)}
           </button>
         </div>
       )}
