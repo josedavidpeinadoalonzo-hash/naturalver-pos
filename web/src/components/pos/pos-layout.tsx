@@ -58,11 +58,28 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const [returnData, setReturnData] = useState<any>(null);
   const [showStockInfo, setShowStockInfo] = useState<Product | null>(null);
   const [showProductSearch, setShowProductSearch] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [mobileQuery, setMobileQuery] = useState("");
+
+  const mobileResults = useMemo(() => {
+    if (!mobileQuery.trim()) return [];
+    const q = mobileQuery.toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.barcode?.toLowerCase().includes(q)
+    );
+  }, [products, mobileQuery]);
+
+  function basePrice(pres: Product["presentations"][0]): number {
+    if (pres.exento || ivaPercent === 0) return pres.priceUSD;
+    return pres.priceUSD / (1 + ivaPercent / 100);
+  }
 
   const ivaAmount = useMemo(() => {
     const taxable = items
       .filter(i => !i.presentation.exento)
-      .reduce((s, i) => s + Math.max(0, i.presentation.priceUSD - (i.discount || 0)) * i.quantity, 0);
+      .reduce((s, i) => s + Math.max(0, basePrice(i.presentation) - (i.discount || 0)) * i.quantity, 0);
     return (taxable * ivaPercent) / 100;
   }, [items, ivaPercent]);
 
@@ -271,7 +288,10 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
     let exemptTotal = 0;
 
     for (const item of items) {
-      const unitPrice = item.presentation.priceUSD - (item.discount || 0);
+      const itemBase = item.presentation.exento || ivaPercent === 0
+        ? item.presentation.priceUSD
+        : item.presentation.priceUSD / (1 + ivaPercent / 100);
+      const unitPrice = itemBase - (item.discount || 0);
       const lineTotal = Math.max(0, unitPrice) * item.quantity;
       if (item.presentation.exento) {
         exemptTotal += lineTotal;
@@ -347,15 +367,21 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           sellerName: localStorage.getItem("business_name") || "",
           buyerRif: rifCliente || "V-00000000-0",
           buyerName: payment.customerName || "Consumidor Final",
-          items: items.map((i) => ({
-            description: i.product.name,
-            quantity: i.quantity,
-            unitPrice: i.presentation.priceUSD,
-            exemptAmount: i.presentation.exento ? (i.presentation.priceUSD - (i.discount || 0)) * i.quantity : 0,
-            taxableAmount: i.presentation.exento ? 0 : (i.presentation.priceUSD - (i.discount || 0)) * i.quantity,
-            ivaAmount: i.presentation.exento ? 0 : ((i.presentation.priceUSD - (i.discount || 0)) * i.quantity * ivaRate) / 100,
-            totalAmount: (i.presentation.priceUSD - (i.discount || 0)) * i.quantity,
-          })),
+          items: items.map((i) => {
+            const iBase = i.presentation.exento || ivaRate === 0
+              ? i.presentation.priceUSD
+              : i.presentation.priceUSD / (1 + ivaRate / 100);
+            const iEff = iBase - (i.discount || 0);
+            return {
+              description: i.product.name,
+              quantity: i.quantity,
+              unitPrice: iBase,
+              exemptAmount: i.presentation.exento ? iEff * i.quantity : 0,
+              taxableAmount: i.presentation.exento ? 0 : iEff * i.quantity,
+              ivaAmount: i.presentation.exento ? 0 : (iEff * i.quantity * ivaRate) / 100,
+              totalAmount: iEff * i.quantity,
+            };
+          }),
           subtotal: totalUSD,
           exemptAmount: exemptTotal,
           taxableAmount: taxableTotal,
@@ -573,7 +599,66 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="relative flex-1 min-h-0 overflow-hidden">
+          {/* Inline product search */}
+          {showMobileSearch && (
+            <div className="absolute inset-0 z-20 bg-background flex flex-col animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2 px-1 pt-1 pb-2 border-b border-border/40">
+                <input
+                  type="text"
+                  value={mobileQuery}
+                  onChange={(e) => setMobileQuery(e.target.value)}
+                  placeholder="Buscar producto..."
+                  className="flex-1 rounded-xl border-2 border-primary/40 bg-muted/10 px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  autoFocus
+                />
+                <button
+                  onClick={() => { setMobileQuery(""); setShowMobileSearch(false); }}
+                  className="shrink-0 rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-1">
+                <div className="flex items-center justify-between px-1 py-1.5">
+                  <span className="text-[11px] text-muted-foreground font-medium">
+                    {mobileResults.length} producto{mobileResults.length !== 1 ? "s" : ""}
+                  </span>
+                  <button
+                    onClick={() => { setMobileQuery(""); setShowMobileSearch(false); setShowProductSearch(true); }}
+                    className="text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    Ver todos
+                  </button>
+                </div>
+                {mobileResults.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-muted-foreground">Sin resultados</p>
+                ) : (
+                  <div className="space-y-1">
+                    {mobileResults.map((p) => {
+                      const pres = p.presentations[0];
+                      const price = pres ? formatUSD(basePrice(pres)) : "";
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => { addToCart(p); setMobileQuery(""); setShowMobileSearch(false); }}
+                          className="flex w-full items-center gap-3 rounded-xl border border-border/50 px-3 py-3 text-left text-sm hover:border-primary/40 hover:bg-muted/10 active:scale-[0.98] transition-all"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <span className="font-semibold block truncate">{p.name}</span>
+                            <span className="text-[10px] text-muted-foreground block truncate">
+                              {pres?.name || ""} · Stock: {pres?.stock || 0}und
+                            </span>
+                          </div>
+                          <span className="font-bold text-sm shrink-0">{price}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <ReceiptPanel
             onCheckout={() => setShowPayment(true)}
             currency={currency}
@@ -601,7 +686,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
 
         <div className="flex gap-2">
           <button
-            onClick={() => setShowProductSearch(true)}
+            onClick={() => { setMobileQuery(""); setShowMobileSearch(true); }}
             className="rounded-xl border-2 border-border/60 px-3 py-3 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all flex items-center gap-1.5"
           >
             <Search className="h-4 w-4" />

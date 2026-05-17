@@ -22,8 +22,13 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
 
   const rate = currency === "VES" ? exchangeRate : currency === "COP" ? (() => { try { return Number(localStorage.getItem("cop_rate") || "0"); } catch { return 0; } })() : 1;
 
+  function basePrice(pres: typeof items[0]["presentation"]): number {
+    if (pres.exento || ivaPercent === 0) return pres.priceUSD;
+    return pres.priceUSD / (1 + ivaPercent / 100);
+  }
+
   function itemEffectivePrice(item: typeof items[0]): number {
-    return item.presentation.priceUSD - (item.discount || 0);
+    return basePrice(item.presentation) - (item.discount || 0);
   }
 
   function itemLineTotal(item: typeof items[0]): number {
@@ -31,7 +36,7 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
   }
 
   function subtotal(): number {
-    return items.reduce((s, i) => s + i.presentation.priceUSD * i.quantity, 0);
+    return items.reduce((s, i) => s + basePrice(i.presentation) * i.quantity, 0);
   }
 
   function fmt(usd: number): string {
@@ -144,7 +149,7 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
           <div className="divide-y divide-gray-100">
             {items.map((item, idx) => {
               const discount = item.discount || 0;
-              const unitPrice = item.presentation.priceUSD;
+              const unitPrice = basePrice(item.presentation);
               const effectivePrice = unitPrice - discount;
               const lineTotal = effectivePrice * item.quantity;
               return (
