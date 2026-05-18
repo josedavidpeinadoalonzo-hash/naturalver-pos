@@ -133,8 +133,7 @@ export default function CashCloseScreen() {
 
           <View className="gap-3">
             <Text className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Rendimiento del Día</Text>
-            <Card accentColor={netProfitUSD >= 0 ? '#10B981' : '#EF4444'} variant="glass" style={{ padding: 0 }}>
-              <View className="items-center py-8">
+            <Card accentColor={netProfitUSD >= 0 ? '#10B981' : '#EF4444'} variant="glass" style={{ padding: 0 }} onPress={() => router.push('../reports')}>
                 <Text className="text-xs font-black text-muted uppercase tracking-widest mb-2">Utilidad Neta Estimada</Text>
                 <View className="flex-row items-baseline gap-2">
                   <Text className={`text-6xl font-black ${netProfitUSD >= 0 ? 'text-emerald-500' : 'text-red-500'} tracking-tighter`}>
@@ -155,23 +154,38 @@ export default function CashCloseScreen() {
                     <Text className="text-xl font-black text-primary">{exchangeRate.toFixed(2)}</Text>
                   </View>
                 </View>
-              </View>
             </Card>
 
             <View className="flex-row gap-4">
               <StatCard 
                 label="Ingresos" 
                 value={`$${totalSalesUSD.toFixed(2)}`} 
+                subValue={`${todaySales.length} ventas • ${todaySales.reduce((a, s) => a + s.quantity, 0)} productos`}
                 icon="trending-up" 
                 color="#10B981" 
                 style={{ flex: 1 }}
+                onPress={() => Alert.alert('Ingresos del Día', 
+                  `Total: $${totalSalesUSD.toFixed(2)}\n` +
+                  `Transacciones: ${todaySales.length}\n` +
+                  `Productos vendidos: ${todaySales.reduce((a, s) => a + s.quantity, 0)}\n` +
+                  `Pago Móvil: $${todaySales.filter(s => s.paymentType === 'mobile').reduce((a, s) => a + s.totalAmountUSD, 0).toFixed(2)}\n` +
+                  `Efectivo: $${todaySales.filter(s => s.paymentType === 'cash').reduce((a, s) => a + s.totalAmountUSD, 0).toFixed(2)}`
+                )}
               />
               <StatCard 
                 label="Egresos" 
                 value={`$${totalExpensesUSD.toFixed(2)}`} 
+                subValue={`${todayExpenses.length} gastos registrados`}
                 icon="trending-down" 
                 color="#EF4444" 
                 style={{ flex: 1 }}
+                onPress={() => Alert.alert('Egresos del Día', 
+                  `Total: $${totalExpensesUSD.toFixed(2)}\n` +
+                  `Cantidad de gastos: ${todayExpenses.length}\n` +
+                  `Transporte: $${todayExpenses.filter(e => e.category === 'transporte').reduce((a, e) => a + e.amountUSD, 0).toFixed(2)}\n` +
+                  `Mercancía: $${todayExpenses.filter(e => e.category === 'mercancia').reduce((a, e) => a + e.amountUSD, 0).toFixed(2)}\n` +
+                  `Servicios: $${todayExpenses.filter(e => e.category === 'servicios').reduce((a, e) => a + e.amountUSD, 0).toFixed(2)}`
+                )}
               />
             </View>
           </View>

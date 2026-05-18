@@ -111,7 +111,7 @@ export default function HomeScreen() {
 
           {/* Main Stats Card (PREMIUM LOOK) */}
           <View style={{ position: 'relative' }}>
-            <Card accentColor={netProfit >= 0 ? '#10B981' : '#EF4444'} style={{ padding: 0, borderLeftWidth: 0 }}>
+            <Card accentColor={netProfit >= 0 ? '#10B981' : '#EF4444'} style={{ padding: 0, borderLeftWidth: 0 }} onPress={() => navigate('../reports')}>
               <View className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -mr-20 -mt-20" />
               <View className="p-6">
                 <View className="flex-row justify-between items-center mb-6">
@@ -164,6 +164,7 @@ export default function HomeScreen() {
               subValue={`${dailySummary?.totalMobileIncomeBS?.toFixed(2) || '0.00'} Bs`}
               icon="smartphone"
               color="#34D399"
+              onPress={() => navigate('../reports')}
             />
             <StatCard 
               label="Efectivo" 
@@ -171,6 +172,7 @@ export default function HomeScreen() {
               subValue="Respaldo en Caja"
               icon="payments"
               color="#FBBF24"
+              onPress={() => navigate('../reports')}
             />
           </View>
 

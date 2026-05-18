@@ -126,54 +126,101 @@ export default function ReportsScreen() {
           {summary && (
             <View className="gap-4">
               {/* Ventas Totales */}
-              <View className="bg-surface rounded-lg p-4 border border-border">
-                <View className="flex-row items-center gap-2 mb-2">
-                  <MaterialIcons name="trending-up" size={20} color={colors.primary} />
-                  <Text className="text-sm text-muted">Ventas Totales</Text>
+              <Pressable
+                onPress={() => {
+                  const periodLabel = period === 'daily' ? 'diario' : period === 'weekly' ? 'semanal' : 'mensual';
+                  Alert.alert(`Resumen ${periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)}`,
+                    `Ventas Totales: $${summary.totalSales.toFixed(2)}\n` +
+                    `Transacciones: ${summary.salesCount}\n` +
+                    `Productos Vendidos: ${summary.productsCount}\n\n` +
+                    `Pago Móvil: $${summary.totalMobileIncome.toFixed(2)}\n` +
+                    `Efectivo: $${summary.totalCashIncome.toFixed(2)}`
+                  );
+                }}
+                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+              >
+                <View className="bg-surface rounded-lg p-4 border border-border">
+                  <View className="flex-row items-center gap-2 mb-2">
+                    <MaterialIcons name="trending-up" size={20} color={colors.primary} />
+                    <Text className="text-sm text-muted">Ventas Totales</Text>
+                  </View>
+                  <Text className="text-3xl font-bold text-foreground">
+                    ${summary.totalSales.toFixed(2)}
+                  </Text>
                 </View>
-                <Text className="text-3xl font-bold text-foreground">
-                  ${summary.totalSales.toFixed(2)}
-                </Text>
-              </View>
+              </Pressable>
 
               {/* Ingresos por Tipo de Pago */}
               <View className="flex-row gap-3">
-                <View className="flex-1 bg-surface rounded-lg p-4 border border-border">
-                  <View className="flex-row items-center gap-2 mb-2">
-                    <MaterialIcons name="phone" size={16} color="#34D399" />
-                    <Text className="text-xs text-muted">Pago Móvil</Text>
+                <Pressable
+                  onPress={() => Alert.alert('Pago Móvil',
+                    `Total: $${summary.totalMobileIncome.toFixed(2)}\n` +
+                    `Porcentaje: ${summary.totalSales > 0 ? ((summary.totalMobileIncome / summary.totalSales) * 100).toFixed(1) : 0}% de las ventas`
+                  )}
+                  style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View className="bg-surface rounded-lg p-4 border border-border">
+                    <View className="flex-row items-center gap-2 mb-2">
+                      <MaterialIcons name="phone" size={16} color="#34D399" />
+                      <Text className="text-xs text-muted">Pago Móvil</Text>
+                    </View>
+                    <Text className="text-lg font-bold text-foreground">
+                      ${summary.totalMobileIncome.toFixed(2)}
+                    </Text>
                   </View>
-                  <Text className="text-lg font-bold text-foreground">
-                    ${summary.totalMobileIncome.toFixed(2)}
-                  </Text>
-                </View>
+                </Pressable>
 
-                <View className="flex-1 bg-surface rounded-lg p-4 border border-border">
-                  <View className="flex-row items-center gap-2 mb-2">
-                    <MaterialIcons name="attach-money" size={16} color="#FBBF24" />
-                    <Text className="text-xs text-muted">Dólares</Text>
+                <Pressable
+                  onPress={() => Alert.alert('Efectivo USD',
+                    `Total: $${summary.totalCashIncome.toFixed(2)}\n` +
+                    `Porcentaje: ${summary.totalSales > 0 ? ((summary.totalCashIncome / summary.totalSales) * 100).toFixed(1) : 0}% de las ventas`
+                  )}
+                  style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View className="flex-1 bg-surface rounded-lg p-4 border border-border">
+                    <View className="flex-row items-center gap-2 mb-2">
+                      <MaterialIcons name="attach-money" size={16} color="#FBBF24" />
+                      <Text className="text-xs text-muted">Dólares</Text>
+                    </View>
+                    <Text className="text-lg font-bold text-foreground">
+                      ${summary.totalCashIncome.toFixed(2)}
+                    </Text>
                   </View>
-                  <Text className="text-lg font-bold text-foreground">
-                    ${summary.totalCashIncome.toFixed(2)}
-                  </Text>
-                </View>
+                </Pressable>
               </View>
 
               {/* Estadísticas */}
               <View className="flex-row gap-3">
-                <View className="flex-1 bg-surface rounded-lg p-4 border border-border">
-                  <Text className="text-xs text-muted mb-2">Productos Vendidos</Text>
-                  <Text className="text-2xl font-bold text-foreground">
-                    {summary.productsCount}
-                  </Text>
-                </View>
+                <Pressable
+                  onPress={() => Alert.alert('Productos Vendidos',
+                    `Total: ${summary.productsCount} unidades\n` +
+                    `Distribuidas en ${summary.salesCount} transacciones\n` +
+                    `Promedio: ${summary.salesCount > 0 ? (summary.productsCount / summary.salesCount).toFixed(1) : 0} productos por venta`
+                  )}
+                  style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View className="flex-1 bg-surface rounded-lg p-4 border border-border">
+                    <Text className="text-xs text-muted mb-2">Productos Vendidos</Text>
+                    <Text className="text-2xl font-bold text-foreground">
+                      {summary.productsCount}
+                    </Text>
+                  </View>
+                </Pressable>
 
-                <View className="flex-1 bg-surface rounded-lg p-4 border border-border">
-                  <Text className="text-xs text-muted mb-2">Transacciones</Text>
-                  <Text className="text-2xl font-bold text-foreground">
-                    {summary.salesCount}
-                  </Text>
-                </View>
+                <Pressable
+                  onPress={() => Alert.alert('Transacciones',
+                    `Total: ${summary.salesCount} ventas\n` +
+                    `Ticket promedio: $${summary.salesCount > 0 ? (summary.totalSales / summary.salesCount).toFixed(2) : '0.00'}`
+                  )}
+                  style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.7 : 1 }]}
+                >
+                  <View className="flex-1 bg-surface rounded-lg p-4 border border-border">
+                    <Text className="text-xs text-muted mb-2">Transacciones</Text>
+                    <Text className="text-2xl font-bold text-foreground">
+                      {summary.salesCount}
+                    </Text>
+                  </View>
+                </Pressable>
               </View>
 
               {/* Detalle de Ventas */}

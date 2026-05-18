@@ -178,18 +178,37 @@ export default function ExpensesScreen() {
               subValue={`${(todayTotal * exchangeRate).toFixed(0)} Bs`}
               icon="trending-down" 
               color="#EF4444" 
+              onPress={() => {
+                const cats = todayExpenses.reduce((acc: Record<string, number>, e) => {
+                  acc[e.category] = (acc[e.category] || 0) + e.amountUSD;
+                  return acc;
+                }, {});
+                Alert.alert('Gastos de Hoy',
+                  `Total: $${todayTotal.toFixed(2)}\n` +
+                  `Cantidad: ${todayExpenses.length} gastos\n\n` +
+                  Object.entries(cats).map(([cat, amt]) => 
+                    `• ${cat.charAt(0).toUpperCase() + cat.slice(1)}: $${amt.toFixed(2)}`
+                  ).join('\n')
+                );
+              }}
             />
             <StatCard 
               label="Total Mes" 
               value={`$${totalExpenses.toFixed(2)}`} 
+              subValue={`${state.expenses.length} gastos`}
               icon="calendar-today" 
               color="#6366F1" 
+              onPress={() => Alert.alert('Gastos del Mes', 
+                `Total Acumulado: $${totalExpenses.toFixed(2)}\n` +
+                `≈ ${(totalExpenses * exchangeRate).toFixed(2)} Bs\n` +
+                `Registros: ${state.expenses.length} gastos`
+              )}
             />
           </View>
 
           {state.dailySummary && (
             <View>
-              <Card accentColor={(state.dailySummary.totalSales - todayTotal) >= 0 ? '#10B981' : '#EF4444'} variant="glass" style={{ padding: 0 }}>
+              <Card accentColor={(state.dailySummary.totalSales - todayTotal) >= 0 ? '#10B981' : '#EF4444'} variant="glass" style={{ padding: 0 }} onPress={() => router.push('./reports')}>
                 <View className="p-6">
                   <View className="flex-row justify-between items-center mb-4">
                     <Text className="text-[10px] font-black text-muted uppercase tracking-widest">Rentabilidad Neta Hoy</Text>
@@ -262,7 +281,18 @@ export default function ExpensesScreen() {
                 {[...state.expenses].reverse().map(item => {
                   const catInfo = getCategoryInfo(item.category);
                   return (
-                    <Card key={item.id} accentColor="#EF4444" style={{ padding: 0, marginBottom: 8 }}>
+                    <Card key={item.id} accentColor="#EF4444" style={{ padding: 0, marginBottom: 8 }} onPress={() => Alert.alert(item.description,
+                      `Categoría: ${catInfo.label}\n` +
+                      `Monto: -$${item.amountUSD.toFixed(2)}\n` +
+                      `Bs: ${(item.amountUSD * item.exchangeRate).toFixed(2)} Bs\n` +
+                      `Tasa: ${item.exchangeRate.toFixed(2)} Bs/$\n` +
+                      `Fecha: ${new Date(item.createdAt).toLocaleDateString('es-VE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}\n\n` +
+                      `¿Qué deseas hacer?`,
+                      [
+                        { text: 'Cerrar', style: 'cancel' },
+                        { text: 'Eliminar', style: 'destructive', onPress: () => handleDeleteExpense(item) }
+                      ]
+                    )}>
                       <View className="p-4 flex-row justify-between items-center">
                         <View className="flex-row items-center gap-4 flex-1">
                           <View className="w-12 h-12 rounded-2xl bg-red-500/10 items-center justify-center border border-red-500/10">

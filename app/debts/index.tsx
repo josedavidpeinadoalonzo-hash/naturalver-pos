@@ -161,7 +161,17 @@ export default function DebtsScreen() {
           </View>
 
           {/* Premium Total Summary */}
-          <Card accentColor="#EF4444" variant="glass" style={{ padding: 0 }}>
+          <Card accentColor="#EF4444" variant="glass" style={{ padding: 0 }} onPress={() => {
+            const pending = state.debts.filter(d => d.status !== 'paid');
+            Alert.alert('Resumen de Cobranzas',
+              `Total por Cobrar: $${totalPending.toFixed(2)}\n` +
+              `≈ ${(totalPending * state.exchangeRate).toFixed(2)} Bs\n\n` +
+              `Clientes Pendientes: ${pending.length}\n` +
+              `Total Deudas: ${state.debts.length}\n` +
+              `Pagadas: ${state.debts.filter(d => d.status === 'paid').length}\n\n` +
+              `Tasa BCV: ${state.exchangeRate.toFixed(2)} Bs/$`
+            );
+          }}>
             <View className="p-6">
               <View className="flex-row justify-between items-center mb-4">
                 <Text className="text-[10px] font-black text-muted uppercase tracking-widest">Total por Cobrar</Text>
@@ -217,7 +227,7 @@ export default function DebtsScreen() {
 
           <View className="gap-4 pb-10">
             {filteredDebts.map(item => (
-              <Card key={item.id} accentColor={getStatusColor(item.status)} style={{ padding: 0, marginBottom: 4 }}>
+              <Card key={item.id} accentColor={getStatusColor(item.status)} style={{ padding: 0, marginBottom: 4 }} onPress={() => item.status !== 'paid' ? handleAddPayment(item) : null}>
                 <View className="p-5">
                   <View className="flex-row justify-between items-start mb-4">
                     <View className="flex-1">
