@@ -17,38 +17,68 @@ interface PosPaymentProps {
   ivaAmount?: number;
 }
 
+export type PosPaymentType =
+  | "efectivo_bs"
+  | "efectivo_usd"
+  | "pago_movil"
+  | "punto_venta"
+  | "tarjeta_credito"
+  | "transferencia"
+  | "divisas"
+  | "mixto";
+
 export interface PosPaymentData {
-  paymentType: "cash" | "mobile" | "pos" | "mixed";
+  paymentType: PosPaymentType;
   cashUSD: number;
+  cashBS: number;
   mobileBS: number;
+  receivedBS: number;
+  receivedUSD: number;
+  divisaType?: "EUR" | "COP";
+  divisaRate?: number;
+  divisaAmount?: number;
   customerName: string;
   customerRif?: string;
   customerEmail?: string;
   paymentReference?: string;
   paymentBank?: string;
+  paymentPhone?: string;
   cardType?: "debito" | "credito";
   generateInvoice?: boolean;
 }
 
-const PAYMENT_OPTIONS = [
-  { type: "cash" as const, label: "Efectivo", icon: Banknote, color: "from-green-500 to-green-600" },
-  { type: "mobile" as const, label: "Pago Móvil", icon: Smartphone, color: "from-blue-500 to-blue-600" },
-  { type: "pos" as const, label: "Punto de Venta", icon: CreditCard, color: "from-purple-500 to-purple-600" },
-  { type: "mixed" as const, label: "Mixto", icon: Shuffle, color: "from-orange-500 to-orange-600" },
+const PAYMENT_OPTIONS: { type: PosPaymentType; label: string; icon: typeof Banknote; color: string }[] = [
+  { type: "efectivo_bs", label: "Efectivo Bs", icon: Banknote, color: "from-emerald-600 to-emerald-700" },
+  { type: "efectivo_usd", label: "Efectivo \$", icon: Banknote, color: "from-green-500 to-green-600" },
+  { type: "pago_movil", label: "Pago Móvil", icon: Smartphone, color: "from-blue-500 to-blue-600" },
+  { type: "punto_venta", label: "Pto. Venta", icon: CreditCard, color: "from-purple-500 to-purple-600" },
+  { type: "tarjeta_credito", label: "Crédito", icon: CreditCard, color: "from-violet-500 to-violet-600" },
+  { type: "transferencia", label: "Transfer.", icon: Smartphone, color: "from-cyan-500 to-cyan-600" },
+  { type: "divisas", label: "Divisas", icon: Banknote, color: "from-amber-500 to-amber-600" },
+  { type: "mixto", label: "Mixto", icon: Shuffle, color: "from-orange-500 to-orange-600" },
 ];
 
 export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose, totalWithIVA, ivaAmount }: PosPaymentProps) {
   const { totalUSD, clearCart } = useCart();
   const effectiveTotal = totalWithIVA !== undefined ? totalWithIVA : totalUSD;
-  const [paymentType, setPaymentType] = useState<"cash" | "mobile" | "pos" | "mixed">("cash");
-  const [cashReceived, setCashReceived] = useState(effectiveTotal);
-  const [mobileBS, setMobileBS] = useState(effectiveTotal * exchangeRate);
+  const totalBS = effectiveTotal * exchangeRate;
+  const [paymentType, setPaymentType] = useState<PosPaymentType>("efectivo_bs");
+  const [cashReceivedBS, setCashReceivedBS] = useState(totalBS);
+  const [cashReceivedUSD, setCashReceivedUSD] = useState(effectiveTotal);
+  const [mobileBS, setMobileBS] = useState(totalBS);
   const [customerName, setCustomerName] = useState("");
   const [customerRif, setCustomerRif] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentBank, setPaymentBank] = useState("");
+  const [paymentPhone, setPaymentPhone] = useState("");
   const [cardType, setCardType] = useState<"debito" | "credito">("debito");
+  const [divisaType, setDivisaType] = useState<"EUR" | "COP">("EUR");
+  const [divisaRate, setDivisaRate] = useState(0);
+  const [divisaAmount, setDivisaAmount] = useState(0);
+  const [mixedCashBS, setMixedCashBS] = useState(0);
+  const [mixedCashUSD, setMixedCashUSD] = useState(0);
+  const [mixedMobileBS, setMixedMobileBS] = useState(0);
   const [saving, setSaving] = useState(false);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
@@ -83,33 +113,51 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
     setCustomerQuery("");
   }
 
-  const discount = paymentType === "cash" ? (cashDiscount || 0) : 0;
+  const discount = paymentType === "efectivo_bs" || paymentType === "efectivo_usd" ? (cashDiscount || 0) : 0;
   const finalUSD = Math.max(0, effectiveTotal - discount);
-  const totalBS = finalUSD * exchangeRate;
-  const change = Math.max(0, cashReceived - finalUSD);
+  const finalBS = finalUSD * exchangeRate;
+  const changeBS = Math.max(0, cashReceivedBS - finalBS);
+  const changeUSD = Math.max(0, cashReceivedUSD - finalUSD);
+
+  function getLabel(t: PosPaymentType): string {
+    return PAYMENT_OPTIONS.find((o) => o.type === t)?.label || t;
+  }
 
   async function handleConfirm() {
     if (saving) return;
     setSaving(true);
     try {
-      let cashAmt = 0;
-      let mobileAmt = 0;
-      if (paymentType === "cash") cashAmt = finalUSD;
-      else if (paymentType === "mobile") mobileAmt = totalBS;
-      else if (paymentType === "mixed") {
-        cashAmt = Math.min(finalUSD, cashReceived);
-        mobileAmt = totalBS - (cashAmt * exchangeRate);
+      let cashUSD = 0;
+      let cashBS = 0;
+      let mobileBSAmt = 0;
+      if (paymentType === "efectivo_bs") { cashBS = finalBS; cashUSD = 0; }
+      else if (paymentType === "efectivo_usd") { cashUSD = finalUSD; cashBS = 0; }
+      else if (paymentType === "pago_movil") { mobileBSAmt = finalBS; }
+      else if (paymentType === "punto_venta" || paymentType === "tarjeta_credito") { cashUSD = finalUSD; }
+      else if (paymentType === "transferencia") { mobileBSAmt = finalBS; }
+      else if (paymentType === "divisas") { cashUSD = finalUSD; }
+      else if (paymentType === "mixto") {
+        cashBS = mixedCashBS;
+        cashUSD = mixedCashUSD;
+        mobileBSAmt = mixedMobileBS;
       }
       await onConfirm({
         paymentType,
-        cashUSD: cashAmt,
-        mobileBS: mobileAmt,
+        cashUSD,
+        cashBS,
+        mobileBS: mobileBSAmt,
+        receivedBS: cashReceivedBS,
+        receivedUSD: cashReceivedUSD,
+        divisaType: paymentType === "divisas" ? divisaType : undefined,
+        divisaRate: paymentType === "divisas" ? divisaRate : undefined,
+        divisaAmount: paymentType === "divisas" ? divisaAmount : undefined,
         customerName,
         customerRif: customerRif.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
-        paymentReference: paymentType === "pos" ? paymentReference : undefined,
-        paymentBank: paymentType === "pos" ? paymentBank : undefined,
-        cardType: paymentType === "pos" ? cardType : undefined,
+        paymentReference: paymentType === "punto_venta" || paymentType === "tarjeta_credito" || paymentType === "transferencia" || paymentType === "pago_movil" ? paymentReference : undefined,
+        paymentBank: paymentType === "punto_venta" || paymentType === "tarjeta_credito" || paymentType === "transferencia" || paymentType === "pago_movil" ? paymentBank : undefined,
+        paymentPhone: paymentType === "pago_movil" ? paymentPhone : undefined,
+        cardType: paymentType === "punto_venta" || paymentType === "tarjeta_credito" ? cardType : undefined,
         generateInvoice: generateInvoice || undefined,
       });
       clearCart();
@@ -141,12 +189,12 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
             <p className="text-4xl font-bold tabular-nums tracking-tight">{formatUSD(finalUSD)}</p>
             {ivaAmount !== undefined && ivaAmount > 0 && (
               <p className="text-xs text-muted-foreground mt-1">
-                Base: {formatUSD(finalUSD - ivaAmount)} + IVA: {formatUSD(ivaAmount)}
+                Base: {formatUSD(Number((finalUSD - ivaAmount).toFixed(2)))} + IVA: {formatUSD(ivaAmount)}
               </p>
             )}
             {exchangeRate > 0 && (
               <p className="text-sm text-muted-foreground mt-1.5 font-medium">
-                Bs. {formatBs(totalBS)} <span className="text-xs text-muted-foreground/60">@ {exchangeRate.toFixed(2)}</span>
+                Bs. {formatBs(finalBS)} <span className="text-xs text-muted-foreground/60">@ {exchangeRate.toFixed(2)}</span>
               </p>
             )}
           </div>
@@ -158,10 +206,11 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
                 key={type}
                 onClick={() => {
                   setPaymentType(type);
-                  if (type === "cash") setCashReceived(finalUSD);
+                  if (type === "efectivo_bs") setCashReceivedBS(totalBS);
+                  if (type === "efectivo_usd") setCashReceivedUSD(effectiveTotal);
                 }}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 rounded-xl border-2 px-2 py-3 text-xs font-semibold transition-all",
+                  "flex flex-col items-center gap-1.5 rounded-xl border-2 px-2 py-3 text-[10px] font-semibold transition-all",
                   paymentType === type
                     ? `bg-gradient-to-b ${color} text-white border-transparent shadow-lg scale-105`
                     : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground hover:bg-muted/10"
@@ -173,26 +222,28 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
             ))}
           </div>
 
-          {/* Cash received + change */}
-          {paymentType === "cash" && (
+          {/* Efectivo Bs */}
+          {paymentType === "efectivo_bs" && (
             <div className="space-y-3 rounded-xl bg-muted/10 p-4 border border-border/40">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">
-                  Recibido (USD)
+                  Recibido (Bs)
                 </label>
                 <input
                   type="number"
-                  min={finalUSD}
-                  step="0.5"
-                  value={cashReceived || ""}
-                  onChange={(e) => setCashReceived(Math.max(finalUSD, Number(e.target.value) || 0))}
+                  min={finalBS}
+                  step="10"
+                  value={cashReceivedBS || ""}
+                  onChange={(e) => setCashReceivedBS(Math.max(finalBS, Number(e.target.value) || 0))}
                   className="w-full rounded-xl border-2 border-border/60 bg-background px-4 py-3.5 text-center text-2xl font-bold tabular-nums font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
-              {cashReceived >= finalUSD && (
+              {cashReceivedBS >= finalBS && (
                 <div className="flex items-center justify-between rounded-xl bg-success/10 border border-success/20 p-3.5">
                   <span className="text-sm font-semibold text-success">Cambio</span>
-                  <span className="text-2xl font-bold text-success tabular-nums font-mono">{formatUSD(change)}</span>
+                  <span className="text-2xl font-bold text-success tabular-nums font-mono">
+                    Bs. {formatBs(changeBS)}
+                  </span>
                 </div>
               )}
               {discount > 0 && (
@@ -206,24 +257,92 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
             </div>
           )}
 
-          {/* Mobile */}
-          {paymentType === "mobile" && (
-            <div className="rounded-xl bg-muted/10 p-4 border border-border/40">
-              <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Monto en Bs</label>
-              <div className="rounded-xl bg-primary/5 p-4 text-center border border-primary/20">
-                <span className="text-3xl font-bold tabular-nums font-mono">{formatBs(totalBS)}</span>
+          {/* Efectivo USD */}
+          {paymentType === "efectivo_usd" && (
+            <div className="space-y-3 rounded-xl bg-muted/10 p-4 border border-border/40">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">
+                  Recibido (\$)
+                </label>
+                <input
+                  type="number"
+                  min={finalUSD}
+                  step="0.5"
+                  value={cashReceivedUSD || ""}
+                  onChange={(e) => setCashReceivedUSD(Math.max(finalUSD, Number(e.target.value) || 0))}
+                  className="w-full rounded-xl border-2 border-border/60 bg-background px-4 py-3.5 text-center text-2xl font-bold tabular-nums font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+              {cashReceivedUSD >= finalUSD && (
+                <div className="flex items-center justify-between rounded-xl bg-success/10 border border-success/20 p-3.5">
+                  <span className="text-sm font-semibold text-success">Cambio</span>
+                  <span className="text-2xl font-bold text-success tabular-nums font-mono">{formatUSD(changeUSD)}</span>
+                </div>
+              )}
+              {discount > 0 && (
+                <div className="rounded-xl bg-warning/5 border border-warning/20 p-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-success font-semibold">Descuento efectivo</span>
+                    <span className="text-success font-bold">-{formatUSD(discount)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pago Móvil */}
+          {paymentType === "pago_movil" && (
+            <div className="space-y-3 rounded-xl border-2 border-border/60 p-4">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Detalles Pago Móvil</h3>
+              <div className="rounded-xl bg-primary/5 p-3 text-center border border-primary/20">
+                <span className="text-sm text-muted-foreground">Monto</span>
+                <p className="text-2xl font-bold tabular-nums font-mono">{formatBs(finalBS)}</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Teléfono</label>
+                <input
+                  type="text"
+                  value={paymentPhone}
+                  onChange={(e) => setPaymentPhone(e.target.value)}
+                  placeholder="Ej: 0412-1234567"
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Banco</label>
+                <input
+                  type="text"
+                  value={paymentBank}
+                  onChange={(e) => setPaymentBank(e.target.value)}
+                  placeholder="Ej: Mercantil"
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Referencia</label>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  placeholder="N° de referencia"
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
               </div>
             </div>
           )}
 
-          {/* POS details */}
-          {paymentType === "pos" && (
+          {/* Punto de Venta */}
+          {(paymentType === "punto_venta" || paymentType === "tarjeta_credito") && (
             <div className="space-y-3 rounded-xl border-2 border-border/60 p-4">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Detalles de la transacción</h3>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                {paymentType === "tarjeta_credito" ? "Tarjeta de Crédito" : "Punto de Venta"}
+              </h3>
+              <div className="rounded-xl bg-primary/5 p-3 text-center border border-primary/20">
+                <span className="text-sm text-muted-foreground">Monto</span>
+                <p className="text-2xl font-bold tabular-nums font-mono">{formatUSD(finalUSD)}</p>
+              </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Número de Aprobación / Lote *
-                </label>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">N° Aprobación / Lote *</label>
                 <input
                   type="text"
                   value={paymentReference}
@@ -242,53 +361,169 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
                   className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Tipo de Tarjeta</label>
-                <div className="flex gap-2">
-                  {(["debito", "credito"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setCardType(t)}
-                      className={cn(
-                        "flex-1 rounded-lg border-2 px-3 py-2.5 text-sm font-semibold transition-all",
-                        cardType === t
-                          ? "border-primary bg-primary/10 text-primary shadow-sm"
-                          : "border-border/60 text-muted-foreground hover:border-primary/40"
-                      )}
-                    >
-                      {t === "debito" ? "Débito" : "Crédito"}
-                    </button>
-                  ))}
+              {paymentType === "punto_venta" && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Tipo de Tarjeta</label>
+                  <div className="flex gap-2">
+                    {(["debito", "credito"] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setCardType(t)}
+                        className={cn(
+                          "flex-1 rounded-lg border-2 px-3 py-2.5 text-sm font-semibold transition-all",
+                          cardType === t
+                            ? "border-primary bg-primary/10 text-primary shadow-sm"
+                            : "border-border/60 text-muted-foreground hover:border-primary/40"
+                        )}
+                      >
+                        {t === "debito" ? "Débito" : "Crédito"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Transferencia */}
+          {paymentType === "transferencia" && (
+            <div className="space-y-3 rounded-xl border-2 border-border/60 p-4">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Transferencia</h3>
+              <div className="rounded-xl bg-primary/5 p-3 text-center border border-primary/20">
+                <span className="text-sm text-muted-foreground">Monto</span>
+                <p className="text-2xl font-bold tabular-nums font-mono">{formatBs(finalBS)}</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Banco</label>
+                <input
+                  type="text"
+                  value={paymentBank}
+                  onChange={(e) => setPaymentBank(e.target.value)}
+                  placeholder="Ej: Bancamiga"
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Referencia *</label>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  placeholder="N° de transferencia"
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
               </div>
             </div>
           )}
 
-          {/* Mixed */}
-          {paymentType === "mixed" && (
+          {/* Divisas */}
+          {paymentType === "divisas" && (
+            <div className="space-y-3 rounded-xl border-2 border-border/60 p-4">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Divisas</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {(["EUR", "COP"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setDivisaType(t)}
+                    className={cn(
+                      "rounded-lg border-2 px-3 py-2.5 text-sm font-semibold transition-all text-center",
+                      divisaType === t
+                        ? "border-primary bg-primary/10 text-primary shadow-sm"
+                        : "border-border/60 text-muted-foreground hover:border-primary/40"
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Tasa de cambio</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={divisaRate || ""}
+                  onChange={(e) => setDivisaRate(Number(e.target.value) || 0)}
+                  placeholder={divisaType === "EUR" ? "EUR/USD" : "COP/USD"}
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Monto recibido</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={divisaAmount || ""}
+                  onChange={(e) => setDivisaAmount(Number(e.target.value) || 0)}
+                  placeholder={`Monto en ${divisaType}`}
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+              {divisaRate > 0 && divisaAmount > 0 && (
+                <div className="rounded-xl bg-success/10 border border-success/20 p-3 text-center">
+                  <span className="text-xs text-muted-foreground">Equivale a</span>
+                  <p className="text-lg font-bold tabular-nums">{formatUSD(divisaAmount / divisaRate)}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Mixto */}
+          {paymentType === "mixto" && (
             <div className="space-y-3 rounded-xl bg-muted/10 p-4 border border-border/40">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Efectivo (USD)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={cashReceived || ""}
-                  onChange={(e) => setCashReceived(Math.max(0, Math.min(finalUSD, Number(e.target.value) || 0)))}
-                  className="w-full rounded-xl border-2 border-border/60 bg-background px-3 py-2.5 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                />
+              <p className="text-xs text-center text-muted-foreground mb-1">
+                Total: {formatUSD(finalUSD)} / Bs. {formatBs(finalBS)}
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1">
+                  <label className="text-[10px] font-semibold text-muted-foreground mb-1 block uppercase tracking-wider">Efvo. Bs</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="10"
+                    value={mixedCashBS || ""}
+                    onChange={(e) => setMixedCashBS(Number(e.target.value) || 0)}
+                    className="w-full rounded-lg border-2 border-border/60 bg-background px-2 py-2 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="text-[10px] font-semibold text-muted-foreground mb-1 block uppercase tracking-wider">Efvo. \$</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={mixedCashUSD || ""}
+                    onChange={(e) => setMixedCashUSD(Number(e.target.value) || 0)}
+                    className="w-full rounded-lg border-2 border-border/60 bg-background px-2 py-2 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="text-[10px] font-semibold text-muted-foreground mb-1 block uppercase tracking-wider">Pgo. Móvil</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={mixedMobileBS || ""}
+                    onChange={(e) => setMixedMobileBS(Number(e.target.value) || 0)}
+                    className="w-full rounded-lg border-2 border-border/60 bg-background px-2 py-2 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block uppercase tracking-wider">Pago Móvil (Bs)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={mobileBS || ""}
-                  onChange={(e) => setMobileBS(Number(e.target.value) || 0)}
-                  className="w-full rounded-xl border-2 border-border/60 bg-background px-3 py-2.5 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-              </div>
+              {(() => {
+                const totalMixedUSD = (mixedCashBS / exchangeRate) + mixedCashUSD + (mixedMobileBS / exchangeRate);
+                const diff = finalUSD - totalMixedUSD;
+                return (
+                  <div className={cn("flex justify-between rounded-xl p-3 border text-sm font-semibold",
+                    Math.abs(diff) < 0.01
+                      ? "bg-success/10 border-success/20 text-success"
+                      : "bg-danger/10 border-danger/20 text-danger"
+                  )}>
+                    <span>{Math.abs(diff) < 0.01 ? "Cubre el total" : "Diferencia"}</span>
+                    <span>{Math.abs(diff) < 0.01 ? "✓" : formatUSD(diff)}</span>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -384,7 +619,7 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
             size="lg"
             onClick={handleConfirm}
             loading={saving}
-            disabled={paymentType === "pos" && !paymentReference.trim()}
+            disabled={(paymentType === "punto_venta" || paymentType === "tarjeta_credito" || paymentType === "transferencia") && !paymentReference.trim()}
             className="!py-4 text-base"
           >
             <Check className="h-5 w-5" /> Confirmar Venta — {formatUSD(finalUSD)}

@@ -58,6 +58,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const [returnData, setReturnData] = useState<any>(null);
   const [showStockInfo, setShowStockInfo] = useState<Product | null>(null);
   const [showProductSearch, setShowProductSearch] = useState(false);
+  const [lastPayment, setLastPayment] = useState<PosPaymentData | null>(null);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [mobileQuery, setMobileQuery] = useState("");
 
@@ -282,6 +283,17 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
     let taxableTotal = 0;
     let exemptTotal = 0;
 
+    const paymentLabels: Record<string, string> = {
+      efectivo_bs: "Efectivo Bs",
+      efectivo_usd: "Efectivo USD",
+      pago_movil: "Pago Móvil",
+      punto_venta: "Punto de Venta",
+      tarjeta_credito: "Tarjeta Crédito",
+      transferencia: "Transferencia",
+      divisas: "Divisas",
+      mixto: "Mixto",
+    };
+
     for (const item of items) {
       const unitPrice = item.presentation.priceUSD - (item.discount || 0);
       const lineTotal = Math.max(0, unitPrice) * item.quantity;
@@ -290,18 +302,20 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
       } else {
         taxableTotal += lineTotal;
       }
+      const cashUSDTotal = payment.cashUSD + (payment.cashBS / (exchangeRate || 1));
+      const mobileLabel = payment.paymentPhone ? `${payment.mobileBS} (${payment.paymentPhone})` : `${payment.mobileBS}`;
       const record: Record<string, any> = {
         product_id: item.product.id,
         product_name: item.product.name,
         presentation_id: item.presentation.id,
         presentation_name: item.presentation.name,
         quantity: item.quantity,
-        payment_type: payment.paymentType,
+        payment_type: paymentLabels[payment.paymentType] || payment.paymentType,
         total_amount_usd: lineTotal,
         total_amount_bs: lineTotal * exchangeRate,
         exchange_rate: exchangeRate,
         mobile_amount_bs: payment.mobileBS,
-        cash_amount_usd: payment.cashUSD,
+        cash_amount_usd: cashUSDTotal,
         payment_reference: payment.paymentReference || null,
         payment_bank: payment.paymentBank || null,
         card_type: payment.cardType || null,
@@ -383,6 +397,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
       } catch {}
     }
 
+    setLastPayment(payment);
     setConfirmed(true);
   }, [items, exchangeRate, employee, globalDiscount]);
 
@@ -469,6 +484,8 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
               exchangeRate={exchangeRate}
               ivaAmount={ivaAmount}
               totalWithIVA={totalWithIVA}
+              lastPayment={lastPayment}
+              business={business}
             />
           </div>
 
@@ -655,6 +672,8 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
             exchangeRate={exchangeRate}
             ivaAmount={ivaAmount}
             totalWithIVA={totalWithIVA}
+            lastPayment={lastPayment}
+            business={business}
           />
         </div>
 

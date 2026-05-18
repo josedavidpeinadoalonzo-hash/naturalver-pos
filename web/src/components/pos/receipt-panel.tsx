@@ -6,6 +6,8 @@ import { formatUSD, formatBs } from "@/lib/utils";
 import { Trash2, Minus, Plus, ShoppingCart, Printer, Percent, Receipt } from "lucide-react";
 import type { CurrencyCode } from "./currency-selector";
 import { formatByCurrency } from "./currency-selector";
+import type { PosPaymentData } from "./pos-payment";
+import type { Business } from "@/lib/business-store";
 
 interface ReceiptPanelProps {
   onCheckout: () => void;
@@ -14,9 +16,11 @@ interface ReceiptPanelProps {
   exchangeRate?: number;
   totalWithIVA?: number;
   ivaAmount?: number;
+  lastPayment?: PosPaymentData | null;
+  business?: Business | null;
 }
 
-export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exchangeRate = 0, totalWithIVA, ivaAmount: ivaAmt }: ReceiptPanelProps) {
+export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exchangeRate = 0, totalWithIVA, ivaAmount: ivaAmt, lastPayment, business }: ReceiptPanelProps) {
   const { items, updateQuantity, removeItem, totalUSD, totalItems, setItemDiscount, globalDiscount, setGlobalDiscount } = useCart();
   const [discountTarget, setDiscountTarget] = useState<{ idx: number } | null>(null);
 
@@ -52,47 +56,108 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
   }
 
   function handlePrint() {
-    const businessName = localStorage.getItem("business_name") || "Distribuidora DC";
-    const businessRif = localStorage.getItem("business_rif") || "";
+    const bName = business?.name || localStorage.getItem("business_name") || "Distribuidora DC";
+    const bRif = business?.rif || localStorage.getItem("business_rif") || "";
+    const bAddr = business?.address || localStorage.getItem("business_address") || "";
+    const bPhone = business?.phone || localStorage.getItem("business_phone") || "";
     const invoiceNumber = localStorage.getItem("last_invoice_number") || "";
     const controlNumber = localStorage.getItem("last_control_number") || "";
+
+    const taxableTotal = items
+      .filter((i) => !i.presentation.exento)
+      .reduce((s, i) => s + itemEffectivePrice(i) * i.quantity, 0);
+    const exemptTotal = items
+      .filter((i) => i.presentation.exento)
+      .reduce((s, i) => s + itemEffectivePrice(i) * i.quantity, 0);
+    const tax = ivaAmount();
+
     const lines: string[] = [];
-    lines.push("=".repeat(32));
-    lines.push(`       ${businessName}`);
-    lines.push("=".repeat(32));
-    if (businessRif) lines.push(`  RIF: ${businessRif}`);
+    const W = 32;
+
+    function center(text: string) {
+      const pad = Math.max(0, W - text.length);
+      const left = Math.floor(pad / 2);
+      return " ".repeat(left) + text;
+    }
+
+    lines.push(center(bName));
+    if (bRif) lines.push(center(`RIF: ${bRif}`));
+    if (bAddr) lines.push(center(bAddr));
+    if (bPhone) lines.push(center(`Telf: ${bPhone}`));
+    lines.push("=".repeat(W));
+
+    if (invoiceNumber) {
+      lines.push(center(`Factura N°: ${invoiceNumber}`));
+      lines.push(center(`N° Control: ${controlNumber}`));
+      lines.push(center("AUTORIZADO SENIAT"));
+      lines.push("=".repeat(W));
+    }
+
+    lines.push(new Date().toLocaleString());
     lines.push("");
+
     items.forEach((item) => {
-      const unitPrice = itemEffectivePrice(item);
-      const total = unitPrice * item.quantity;
-      const exento = item.presentation.exento ? " (E)" : "";
-      lines.push(`${item.product.name}${exento}`);
-      lines.push(`  ${item.quantity} x ${fmt(unitPrice)}   ${fmt(total)}`);
+      const uPrice = itemEffectivePrice(item);
+      const total = uPrice * item.quantity;
+      const ex = item.presentation.exento ? " (E)" : "";
+      const name = (item.product.name + ex).substring(0, W);
+      const line = `${item.quantity} x ${fmt(uPrice).padStart(7)}  ${fmt(total).padStart(7)}`;
+      lines.push(name);
+      lines.push(" ".repeat(Math.max(0, W - line.length)) + line);
       if (item.discount) {
-        lines.push(`  Desc item: -${fmt(item.discount * item.quantity)}`);
+        lines.push(`  Desc: -${fmt(item.discount * item.quantity)}`);
       }
     });
+
     lines.push("");
-    lines.push("-".repeat(32));
-    lines.push(`Subtotal:      ${fmt(subtotal())}`);
-    const tax = ivaAmount();
+    lines.push("-".repeat(W));
+    lines.push(`BASE IMPONIBLE:${fmt(taxableTotal).padStart(W - 14)}`);
+    if (exemptTotal > 0) {
+      lines.push(`EXENTO:        ${fmt(exemptTotal).padStart(W - 14)}`);
+    }
     if (tax > 0) {
-      lines.push(`IVA (${ivaPercent}%):    ${fmt(tax)}`);
+      lines.push(`IVA (${ivaPercent}%):   ${fmt(tax).padStart(W - 14)}`);
     }
+    lines.push(`SUBTOTAL:      ${fmt(taxableTotal + exemptTotal).padStart(W - 14)}`);
     if (globalDiscount > 0) {
-      lines.push(`Desc total:   -${fmt(globalDiscount)}`);
+      lines.push(`DESCUENTO:    -${fmt(globalDiscount).padStart(W - 15)}`);
     }
-    lines.push(`TOTAL:         ${fmt(totalUSD)}`);
+    lines.push(`TOTAL:         ${fmt(totalUSD + tax).padStart(W - 14)}`);
+
+    if (lastPayment) {
+      lines.push("-".repeat(W));
+      const pLabels: Record<string, string> = {
+        efectivo_bs: "Efectivo Bs", efectivo_usd: "Efectivo USD", pago_movil: "Pago Móvil",
+        punto_venta: "Punto de Venta", tarjeta_credito: "Tarjeta Crédito",
+        transferencia: "Transferencia", divisas: "Divisas", mixto: "Mixto",
+      };
+      const pl = pLabels[lastPayment.paymentType] || lastPayment.paymentType;
+      lines.push(`Pago: ${pl}`);
+      if (lastPayment.paymentReference) lines.push(`Ref: ${lastPayment.paymentReference}`);
+      if (lastPayment.paymentBank) lines.push(`Banco: ${lastPayment.paymentBank}`);
+      if (lastPayment.paymentPhone) lines.push(`Tel: ${lastPayment.paymentPhone}`);
+      if (lastPayment.cardType) lines.push(`Tarjeta: ${lastPayment.cardType === "debito" ? "Débito" : "Crédito"}`);
+      if (lastPayment.divisaType) lines.push(`Divisa: ${lastPayment.divisaType} @ ${lastPayment.divisaRate}`);
+      if (lastPayment.paymentType === "efectivo_bs" && lastPayment.receivedBS > 0) {
+        lines.push(`Recibido: Bs ${lastPayment.receivedBS.toFixed(2)}`);
+        const ch = Math.max(0, lastPayment.receivedBS - (totalUSD + tax) * exchangeRate);
+        if (ch > 0) lines.push(`Cambio:   Bs ${ch.toFixed(2)}`);
+      }
+      if (lastPayment.paymentType === "efectivo_usd" && lastPayment.receivedUSD > 0) {
+        lines.push(`Recibido: $${lastPayment.receivedUSD.toFixed(2)}`);
+        const ch = Math.max(0, lastPayment.receivedUSD - (totalUSD + tax));
+        if (ch > 0) lines.push(`Cambio:   $${ch.toFixed(2)}`);
+      }
+    }
+
     if (invoiceNumber) {
-      lines.push("-".repeat(32));
-      lines.push(`Factura N°: ${invoiceNumber}`);
-      lines.push(`Control:     ${controlNumber}`);
-      lines.push(`AUTORIZADO SENIAT`);
+      lines.push("-".repeat(W));
+      lines.push(center("AUTORIZADO POR SENIAT"));
     }
-    lines.push("-".repeat(32));
+    lines.push("-".repeat(W));
     lines.push(new Date().toLocaleString());
-    lines.push("=".repeat(32));
-    lines.push("     Gracias por su compra!");
+    lines.push("=".repeat(W));
+    lines.push(center("¡Gracias por su compra!"));
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
