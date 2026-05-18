@@ -20,7 +20,7 @@ interface ReceiptPanelProps {
   business?: Business | null;
 }
 
-export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exchangeRate = 0, totalWithIVA, ivaAmount: ivaAmt, lastPayment, business }: ReceiptPanelProps) {
+export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exchangeRate = 0, totalWithIVA, ivaAmount: ivaAmt, lastPayment, business }: ReceiptPanelProps) {
   const { items, updateQuantity, removeItem, totalUSD, totalItems, setItemDiscount, globalDiscount, setGlobalDiscount } = useCart();
   const [discountTarget, setDiscountTarget] = useState<{ idx: number } | null>(null);
 
@@ -139,14 +139,14 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
       if (lastPayment.cardType) lines.push(`Tarjeta: ${lastPayment.cardType === "debito" ? "Débito" : "Crédito"}`);
       if (lastPayment.divisaType) lines.push(`Divisa: ${lastPayment.divisaType} @ ${lastPayment.divisaRate}`);
       if (lastPayment.paymentType === "efectivo_bs" && lastPayment.receivedBS > 0) {
-        lines.push(`Recibido: Bs ${lastPayment.receivedBS.toFixed(2)}`);
+        lines.push(`Recibido:     ${fmt(lastPayment.receivedBS / exchangeRate)}`);
         const ch = Math.max(0, lastPayment.receivedBS - (totalUSD + tax) * exchangeRate);
-        if (ch > 0) lines.push(`Cambio:   Bs ${ch.toFixed(2)}`);
+        if (ch > 0) lines.push(`Cambio:       ${fmt(ch / exchangeRate)}`);
       }
       if (lastPayment.paymentType === "efectivo_usd" && lastPayment.receivedUSD > 0) {
-        lines.push(`Recibido: $${lastPayment.receivedUSD.toFixed(2)}`);
+        lines.push(`Recibido:     ${fmt(lastPayment.receivedUSD)}`);
         const ch = Math.max(0, lastPayment.receivedUSD - (totalUSD + tax));
-        if (ch > 0) lines.push(`Cambio:   $${ch.toFixed(2)}`);
+        if (ch > 0) lines.push(`Cambio:       ${fmt(ch)}`);
       }
     }
 
@@ -271,7 +271,7 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
                         step="0.1"
                         value={discount || ""}
                         onChange={(e) => setItemDiscount(idx, Number(e.target.value) || 0)}
-                        placeholder="Desc. unitario $"
+                        placeholder="Descuento unitario"
                         className="flex-1 rounded-lg border-2 border-border/60 bg-background px-3 py-1.5 text-xs font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                         autoFocus
                       />
@@ -327,7 +327,7 @@ export function ReceiptPanel({ onCheckout, currency = "USD", ivaPercent = 0, exc
                 <span className="text-success text-sm font-semibold">-{fmt(globalDiscount)}</span>
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground font-mono">{currency === "USD" ? "$0.00" : "Bs 0,00"}</span>
+              <span className="text-xs text-muted-foreground font-mono">{fmt(0)}</span>
             )}
           </div>
 
