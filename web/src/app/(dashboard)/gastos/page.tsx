@@ -5,7 +5,11 @@ import { supabase } from "@/lib/supabase/client";
 import { getTenantBusinessId, tenantInsert } from "@/lib/tenant-query";
 import type { Expense, ExpenseCategory } from "@/lib/models";
 import { Plus, Trash2 } from "lucide-react";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { Pagination } from "@/components/ui/pagination";
 import { formatUSD } from "@/lib/utils";
+
+const ITEMS_PER_PAGE = 50;
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -22,6 +26,7 @@ function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     loadExpenses();
@@ -42,6 +47,8 @@ function ExpensesPage() {
   const todayTotal = expenses
     .filter((e) => e.created_at?.startsWith(new Date().toISOString().split("T")[0]))
     .reduce((s, e) => s + Number(e.amount_usd), 0);
+  const totalPages = Math.ceil(expenses.length / ITEMS_PER_PAGE);
+  const paginated = expenses.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const monthTotal = expenses
     .filter((e) => e.created_at?.startsWith(new Date().toISOString().slice(0, 7)))
@@ -76,12 +83,12 @@ function ExpensesPage() {
       )}
 
       {loading ? (
-        <div className="py-8 text-center text-sm text-muted-foreground">Cargando...</div>
+        <SkeletonList count={5} />
       ) : expenses.length === 0 ? (
         <div className="py-8 text-center text-sm text-muted-foreground">No hay gastos registrados</div>
       ) : (
         <div className="space-y-2">
-          {expenses.map((exp) => (
+          {paginated.map((exp) => (
             <Card key={exp.id} variant="flat" className="border border-border">
               <CardContent>
                 <div className="flex items-center justify-between">
@@ -118,6 +125,7 @@ function ExpensesPage() {
           ))}
         </div>
       )}
+      {!loading && <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />}
     </div>
   );
 }

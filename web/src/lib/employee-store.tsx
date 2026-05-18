@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useBusiness } from "@/lib/business-store";
+import { hashPin } from "@/lib/crypto";
 
 export interface Employee {
   id: string;
@@ -18,7 +19,7 @@ interface EmployeeContextType {
   employee: Employee | null;
   employees: Employee[];
   employeesLoaded: boolean;
-  login: (pin: string) => Employee | null;
+  login: (pin: string) => Promise<Employee | null>;
   logout: () => void;
   loadEmployees: () => Promise<void>;
   saveEmployee: (e: Omit<Employee, "id" | "created_at">) => Promise<Employee | null>;
@@ -62,8 +63,9 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loadEmployees, businessId]);
 
-  const login = useCallback((pin: string): Employee | null => {
-    const found = employees.find((e) => e.pin === pin && e.active);
+  const login = useCallback(async (pin: string): Promise<Employee | null> => {
+    const hashedPin = await hashPin(pin);
+    const found = employees.find((e) => e.pin === hashedPin && e.active);
     if (found) {
       setEmployee(found);
       localStorage.setItem("employee", JSON.stringify(found));
@@ -78,8 +80,10 @@ export function EmployeeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const saveEmployee = useCallback(async (data: Omit<Employee, "id" | "created_at">): Promise<Employee | null> => {
+    const hashedPin = await hashPin(data.pin);
     const payload = {
       ...data,
+      pin: hashedPin,
       business_id: businessId,
       created_at: new Date().toISOString(),
     };

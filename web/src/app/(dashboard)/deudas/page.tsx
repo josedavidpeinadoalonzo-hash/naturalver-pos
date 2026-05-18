@@ -7,13 +7,18 @@ import type { Debt } from "@/lib/models";
 import { Wallet, Plus, Filter, DollarSign } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { Pagination } from "@/components/ui/pagination";
 import { cn, formatUSD } from "@/lib/utils";
+
+const ITEMS_PER_PAGE = 50;
 
 function DebtsPage() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [filter, setFilter] = useState<"all" | "pending" | "partial" | "paid">("pending");
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     loadDebts();
@@ -28,6 +33,8 @@ function DebtsPage() {
   }
 
   const filtered = debts.filter((d) => filter === "all" || d.status === filter);
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
   const totalPending = debts
     .filter((d) => d.status !== "paid")
     .reduce((sum, d) => sum + d.remaining_usd, 0);
@@ -60,7 +67,7 @@ function DebtsPage() {
       <div className="flex gap-2 overflow-x-auto pb-1">
         {(["pending", "partial", "paid", "all"] as const).map((f) => (
           <button key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => { setFilter(f); setPage(1); }}
             className={cn(
               "whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors",
               filter === f ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground border border-border"
@@ -71,12 +78,12 @@ function DebtsPage() {
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-sm text-muted-foreground">Cargando...</div>
+        <SkeletonList count={5} />
       ) : filtered.length === 0 ? (
         <div className="py-12 text-center text-sm text-muted-foreground">No hay deudas</div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((debt) => (
+          {paginated.map((debt) => (
             <Card key={debt.id} variant="elevated">
               <CardContent>
                 <div className="flex items-start justify-between mb-2">
@@ -92,15 +99,17 @@ function DebtsPage() {
                   <span>Total: <strong>{formatUSD(debt.total_amount_usd)}</strong></span>
                   <span>Restante: <strong className="text-danger">{formatUSD(debt.remaining_usd)}</strong></span>
                 </div>
-                <div className="mt-2 h-1.5 w-full rounded-full bg-muted/20 overflow-hidden">
-                  <div className="h-full rounded-full bg-success"
-                    style={{ width: `${Math.min(100, (debt.paid_amount_usd / debt.total_amount_usd) * 100)}%` }} />
-                </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-muted/20 overflow-hidden">
+                    <div className="h-full rounded-full bg-success"
+                      style={{ width: `${debt.total_amount_usd > 0 ? Math.min(100, (debt.paid_amount_usd / debt.total_amount_usd) * 100) : 0}%` }} />
+                  </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {!loading && <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />}
 
       {showForm && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center md:justify-center"

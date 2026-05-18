@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { getTenantBusinessId, tenantInsert } from "@/lib/tenant-query";
 import { getStoredBCVRate } from "@/lib/services/exchange-rate";
-import { DollarSign, Plus, ArrowDownUp, History } from "lucide-react";
+import { DollarSign, Plus, ArrowDownUp, History, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { formatUSD, formatBs, formatDate, cn } from "@/lib/utils";
 
 type CurrencyType = "usd_purchase" | "cop_purchase";
@@ -33,6 +34,12 @@ function DivisasPage() {
       .order("created_at", { ascending: false });
     if (data) setPurchases(data);
     setLoading(false);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("¿Eliminar esta operación de divisa?")) return;
+    await supabase.from("currency_purchases").delete().eq("id", id);
+    loadData();
   }
 
   async function handleSave() {
@@ -136,7 +143,7 @@ function DivisasPage() {
       </h2>
 
       {loading ? (
-        <div className="py-4 text-center text-sm text-muted-foreground">Cargando...</div>
+        <SkeletonList count={3} />
       ) : purchases.length === 0 ? (
         <div className="py-8 text-center text-sm text-muted-foreground">Sin operaciones registradas</div>
       ) : (
@@ -159,6 +166,10 @@ function DivisasPage() {
                       Tasa: {Number(p.exchange_rate_manual).toFixed(2)} · Pagaste: {formatBs(Number(p.total_bs_paid))}
                     </p>
                   </div>
+                  <button onClick={() => handleDelete(p.id)}
+                    className="p-1.5 text-muted-foreground hover:text-danger transition-colors ml-2">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </CardContent>
             </Card>

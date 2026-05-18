@@ -7,6 +7,7 @@ import { getStoredBCVRate } from "@/lib/services/exchange-rate";
 import { CreditCard, Plus, History, Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { formatUSD, formatBs, formatDate, cn } from "@/lib/utils";
 
 function AvancesPage() {
@@ -142,7 +143,7 @@ function AvancesPage() {
                 <div className="flex justify-between"><span>Cliente solicita:</span><span>{formatUSD(amt)}</span></div>
                 <div className="flex justify-between text-warning"><span>Comisión ({commPct}%):</span><span>{formatUSD(commUSD)}</span></div>
                 <div className="flex justify-between"><span>Total a pasar por POS:</span><span className="font-bold">{formatUSD(totalChargeUSD)}</span></div>
-                <div className="flex justify-between border-t border-border pt-1"><span>Efectivo a entregar:</span><span className="font-bold">{formatBs(cashDeliveredBS)} @ {exchangeRate.toFixed(2)}</span></div>
+                <div className="flex justify-between border-t border-border pt-1"><span>Efectivo a entregar:</span><span className="font-bold">{exchangeRate > 0 ? `${formatBs(cashDeliveredBS)} @ ${exchangeRate.toFixed(2)}` : "Bs 0.00 (sin tasa)"}</span></div>
               </div>
             )}
 
@@ -159,7 +160,7 @@ function AvancesPage() {
       </h2>
 
       {loading ? (
-        <div className="py-4 text-center text-sm text-muted-foreground">Cargando...</div>
+        <SkeletonList count={3} />
       ) : advances.length === 0 ? (
         <div className="py-8 text-center text-sm text-muted-foreground">Sin avances registrados</div>
       ) : (

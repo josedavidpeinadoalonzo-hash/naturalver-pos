@@ -8,7 +8,11 @@ import type { Product } from "@/lib/models";
 import { Plus, Search, Package } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { Pagination } from "@/components/ui/pagination";
 import { cn } from "@/lib/utils";
+
+const ITEMS_PER_PAGE = 20;
 
 function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -16,6 +20,7 @@ function ProductsPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     loadProducts();
@@ -46,6 +51,8 @@ function ProductsPage() {
     const matchCategory = !selectedCategory || p.category === selectedCategory;
     return matchSearch && matchCategory;
   });
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const getStockColor = (stock: number, threshold?: number) => {
     const t = threshold || 5;
@@ -72,15 +79,15 @@ function ProductsPage() {
           type="text"
           placeholder="Buscar productos..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="w-full rounded-lg border border-border bg-card py-2 pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
 
       {categories.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
-          <button
-            onClick={() => setSelectedCategory(null)}
+            <button
+            onClick={() => { setSelectedCategory(null); setPage(1); }}
             className={cn(
               "whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors",
               !selectedCategory
@@ -93,7 +100,7 @@ function ProductsPage() {
           {categories.map((cat) => (
             <button
               key={cat}
-              onClick={() => setSelectedCategory(cat)}
+              onClick={() => { setSelectedCategory(cat); setPage(1); }}
               className={cn(
                 "whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium transition-colors",
                 selectedCategory === cat
@@ -108,17 +115,16 @@ function ProductsPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-          Cargando productos...
-        </div>
+        <SkeletonList count={4} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Package className="mb-2 h-12 w-12 opacity-30" />
           <p className="text-sm">No hay productos</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {filtered.map((product) => {
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {paginated.map((product) => {
             const minStock = Math.min(...product.presentations.map((p) => p.stock));
             const threshold = product.presentations[0]?.lowStockThreshold || 5;
             return (
@@ -160,6 +166,8 @@ function ProductsPage() {
             );
           })}
         </div>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
     </div>
   );

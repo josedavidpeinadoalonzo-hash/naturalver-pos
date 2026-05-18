@@ -7,6 +7,7 @@ import { getTenantBusinessId } from "@/lib/tenant-query";
 import type { Customer } from "@/lib/models";
 import { Plus, Search, Users, Phone, CreditCard, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
 
 function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -28,8 +29,9 @@ function CustomersPage() {
         .eq("business_id", bid)
         .order("name");
       if (!error && data) {
-        setCustomers(data as unknown as Customer[]);
-        loadTotals(data as unknown as Customer[]);
+        const customers = data as unknown as Customer[];
+        setCustomers(customers);
+        loadTotals(customers);
       }
     } finally {
       setLoading(false);
@@ -37,18 +39,27 @@ function CustomersPage() {
   }
 
   async function loadTotals(customers: Customer[]) {
-    const result: Record<string, number> = {};
-    for (const c of customers) {
-      const { data } = await supabase
-        .from("sales")
-        .select("total_amount_usd")
-        .eq("rif_cliente", c.id_card)
-        .eq("document_type", "01");
-      if (data) {
-        result[c.id] = data.reduce((s, r) => s + Number(r.total_amount_usd || 0), 0);
+    if (customers.length === 0) { setTotals({}); return; }
+    const bid = getTenantBusinessId();
+    const { data } = await supabase
+      .from("sales")
+      .select("rif_cliente, total_amount_usd")
+      .eq("business_id", bid)
+      .eq("document_type", "01");
+    if (data) {
+      const totalsByRif: Record<string, number> = {};
+      for (const s of data) {
+        const key = s.rif_cliente;
+        totalsByRif[key] = (totalsByRif[key] || 0) + Number(s.total_amount_usd || 0);
       }
+      const result: Record<string, number> = {};
+      for (const c of customers) {
+        if (c.id_card && totalsByRif[c.id_card]) {
+          result[c.id] = totalsByRif[c.id_card];
+        }
+      }
+      setTotals(result);
     }
-    setTotals(result);
   }
 
   const filtered = customers.filter((c) => {
@@ -80,7 +91,7 @@ function CustomersPage() {
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-sm text-muted-foreground">Cargando...</div>
+        <SkeletonList count={5} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-12 text-muted-foreground">
           <Users className="h-12 w-12 opacity-30 mb-2" />

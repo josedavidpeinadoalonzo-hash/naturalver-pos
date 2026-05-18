@@ -8,6 +8,7 @@ import { getTenantBusinessId, tenantInsert } from "@/lib/tenant-query";
 import { Plus, FileText, Download, Globe, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { formatUSD, formatBs, formatDate, cn } from "@/lib/utils";
 
 type Tab = "local" | "colombia";
@@ -84,7 +85,7 @@ function ComprasPage() {
 }
 
 function LocalOrders({ orders, loading, onRefresh }: { orders: any[]; loading: boolean; onRefresh: () => void }) {
-  if (loading) return <div className="py-8 text-center text-sm text-muted-foreground">Cargando...</div>;
+  if (loading) return <SkeletonList count={4} />;
   if (orders.length === 0) return (
     <div className="py-12 text-center">
       <FileText className="mx-auto h-12 w-12 text-muted-foreground/30 mb-3" />
@@ -120,7 +121,7 @@ function LocalOrders({ orders, loading, onRefresh }: { orders: any[]; loading: b
 }
 
 function ColombiaOrders({ orders, loading }: { orders: any[]; loading: boolean }) {
-  if (loading) return <div className="py-8 text-center text-sm text-muted-foreground">Cargando...</div>;
+  if (loading) return <SkeletonList count={4} />;
   if (orders.length === 0) return (
     <div className="py-12 text-center">
       <Globe className="mx-auto h-12 w-12 text-muted-foreground/30 mb-3" />

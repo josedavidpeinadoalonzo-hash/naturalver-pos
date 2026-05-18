@@ -6,15 +6,24 @@ export async function getNextInvoiceNumber(): Promise<string> {
   const year = new Date().getFullYear();
   const businessId = getTenantBusinessId();
 
-  const { data, error } = await supabase
-    .from("sales")
-    .select("id", { count: "exact", head: true })
-    .eq("business_id", businessId)
-    .gte("created_at", `${year}-01-01`)
-    .lte("created_at", `${year}-12-31`);
+  const { data, error } = await supabase.rpc("increment_invoice_sequence", {
+    p_business_id: businessId,
+    p_year: year,
+  });
 
-  const next = (data?.length || 0) + 1;
-  return generateInvoiceNumber(next);
+  if (error || !data) {
+    console.error("invoice sequence error, falling back to count:", error);
+    const { data: fallback } = await supabase
+      .from("sales")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", businessId)
+      .gte("created_at", `${year}-01-01`)
+      .lte("created_at", `${year}-12-31`);
+    const next = (fallback?.length || 0) + 1;
+    return generateInvoiceNumber(next);
+  }
+
+  return generateInvoiceNumber(data);
 }
 
 export async function uploadInvoicePDF(

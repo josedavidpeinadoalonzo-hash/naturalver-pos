@@ -13,7 +13,8 @@ import {
   type PurchaseOrderRow,
   type CompanyData,
 } from "@/lib/reportez/generator";
-import { FileText, Download, ShoppingCart, Package, Loader2 } from "lucide-react";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { FileText, Download, ShoppingCart, Package } from "lucide-react";
 
 export default function ReporteZPage() {
   const [company, setCompany] = useState<CompanyData | null>(null);
@@ -60,9 +61,9 @@ export default function ReporteZPage() {
           .from("purchase_orders")
           .select("*")
           .eq("business_id", bId)
-          .gte("invoice_date", start)
-          .lt("invoice_date", end)
-          .order("invoice_date", { ascending: true }),
+          .gte("created_at", start)
+          .lt("created_at", end)
+          .order("created_at", { ascending: true }),
       ]);
 
       if (cfgRes.data) {
@@ -158,12 +159,7 @@ export default function ReporteZPage() {
         </div>
       )}
 
-      {loading && (
-        <div className="flex items-center justify-center py-8 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          Cargando...
-        </div>
-      )}
+      {loading && <SkeletonList count={4} />}
 
       {loaded && !error && (
         <>

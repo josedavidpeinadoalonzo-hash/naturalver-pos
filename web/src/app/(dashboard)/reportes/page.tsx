@@ -7,6 +7,7 @@ import type { CompanyConfig } from "@/lib/models";
 import { FileBarChart, Download, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { formatUSD, formatBs, today, weekStart, monthStart, cn } from "@/lib/utils";
 import { generateSalesReport, getPeriodLabel } from "@/lib/excel/report";
 
@@ -183,7 +184,7 @@ function ReportsPage() {
       </div>
 
       {loading ? (
-        <div className="py-8 text-center text-muted-foreground">Cargando...</div>
+        <SkeletonList count={4} />
       ) : sales.length === 0 ? (
         <div className="py-8 text-center text-muted-foreground">No hay ventas en este período</div>
       ) : (

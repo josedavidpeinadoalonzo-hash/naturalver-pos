@@ -8,6 +8,7 @@ import { PiggyBank, DollarSign, TrendingUp, ArrowDownUp, CreditCard, Globe, File
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatUSD, formatBs, today } from "@/lib/utils";
+import { SkeletonList } from "@/components/ui/skeleton";
 
 function CashClosePage() {
   const [exchangeRate, setExchangeRate] = useState(getStoredBCVRate());
@@ -20,6 +21,7 @@ function CashClosePage() {
   const [cashAdvances, setCashAdvances] = useState<any[]>([]);
   const [localPurchases, setLocalPurchases] = useState<any[]>([]);
   const [colombiaPurchases, setColombiaPurchases] = useState<any[]>([]);
+  const [debtPayments, setDebtPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [closed, setClosed] = useState(false);
@@ -42,6 +44,7 @@ function CashClosePage() {
       { data: ca },
       { data: lp },
       { data: col },
+      { data: dp },
     ] = await Promise.all([
       supabase.from("sales").select("*").eq("business_id", bId).gte("created_at", startISO),
       supabase.from("expenses").select("*").eq("business_id", bId).gte("created_at", startISO),
@@ -49,6 +52,7 @@ function CashClosePage() {
       supabase.from("cash_advances").select("*").eq("business_id", bId).gte("created_at", startISO),
       supabase.from("purchase_orders").select("*").eq("business_id", bId).gte("created_at", startISO),
       supabase.from("colombia_purchases").select("*").eq("business_id", bId).gte("created_at", startISO),
+      supabase.from("debt_payments").select("*").eq("business_id", bId).gte("created_at", startISO),
     ]);
 
     if (s) setSales(s);
@@ -57,6 +61,7 @@ function CashClosePage() {
     if (ca) setCashAdvances(ca);
     if (lp) setLocalPurchases(lp);
     if (col) setColombiaPurchases(col);
+    if (dp) setDebtPayments(dp);
     setLoading(false);
   }
 
@@ -95,13 +100,25 @@ function CashClosePage() {
   const totalExpensesUSD = expenses.reduce((sum, e) => sum + Number(e.amount_usd), 0);
   const totalExpensesBS = totalExpensesUSD * exchangeRate;
 
+  // === DEBT COLLECTIONS ===
+  const totalDebtCollectedUSD = debtPayments.reduce((sum, p) => sum + Number(p.amount_usd), 0);
+  const totalDebtCollectedBS = debtPayments.reduce((sum, p) => sum + Number(p.amount_bs), 0);
+
+  // === CURRENCY PURCHASE LOSS ===
+  const currencyPurchaseLossUSD = currencyPurchases
+    .reduce((sum, cp) => sum + (Number(cp.total_bs_paid) / (exchangeRate || 1) - Number(cp.amount_received)), 0);
+
   // === NET ===
-  const netBs = (salesMobileBS + totalCommissionBS) - (totalBsPaidForCurrency + totalAdvancesBs + totalLocalPurchasesBs + totalColombiaPurchasesBs + totalExpensesBS);
-  const netUSD = salesCashUSD + salesPOS - totalExpensesUSD;
+  const netBs = (salesMobileBS + totalDebtCollectedBS + totalCommissionBS)
+    - (totalBsPaidForCurrency + totalAdvancesBs + totalLocalPurchasesBs + totalColombiaPurchasesBs + totalExpensesBS);
+  const netUSD = (salesCashUSD + salesPOS + totalCommissionUSD + totalDebtCollectedUSD)
+    - (totalExpensesUSD + Math.max(0, currencyPurchaseLossUSD));
 
   async function handleClose() {
     setSaving(true);
     try {
+      const netProfitUSD = (totalSalesUSD + totalCommissionUSD + totalDebtCollectedUSD)
+        - (totalExpensesUSD + Math.max(0, currencyPurchaseLossUSD));
       await supabase.from("cash_closes").insert({
         business_id: getTenantBusinessId(),
         date: today(),
@@ -109,7 +126,8 @@ function CashClosePage() {
         total_sales_usd: totalSalesUSD,
         total_expenses_usd: totalExpensesUSD,
         total_sales_bs: salesMobileBS,
-        net_profit_usd: totalSalesUSD - totalExpensesUSD + totalCommissionUSD,
+        total_debt_collected_usd: totalDebtCollectedUSD,
+        net_profit_usd: netProfitUSD,
         cash_in_hand: openingUSD + salesCashUSD,
         mobile_balance: salesMobileBS,
         sales_count: salesCount,
@@ -131,14 +149,19 @@ function CashClosePage() {
         </div>
         <h2 className="text-xl font-bold">Cierre Exitoso</h2>
         <p className="text-sm text-muted-foreground">Ganancia neta del día</p>
-        <p className="text-lg font-bold">{formatUSD(totalSalesUSD - totalExpensesUSD + totalCommissionUSD)}</p>
+        <p className="text-lg font-bold">{formatUSD((totalSalesUSD + totalCommissionUSD + totalDebtCollectedUSD) - (totalExpensesUSD + Math.max(0, currencyPurchaseLossUSD)))}</p>
         <Button onClick={() => setClosed(false)}>Nuevo Cierre</Button>
       </div>
     );
   }
 
   if (loading) {
-    return <div className="py-12 text-center text-sm text-muted-foreground">Cargando datos del día...</div>;
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Cierre de Caja</h1>
+        <SkeletonList count={6} />
+      </div>
+    );
   }
 
   return (
@@ -191,6 +214,13 @@ function CashClosePage() {
         )}
       </SectionCard>
 
+      {/* Debt Collections */}
+      {totalDebtCollectedUSD > 0 && (
+        <SectionCard title="COBROS DE DEUDAS" icon={<CreditCard className="h-4 w-4" />} color="text-success">
+          <Row label="Total cobrado" value={`${formatUSD(totalDebtCollectedUSD)} / ${formatBs(totalDebtCollectedBS)}`} bold />
+        </SectionCard>
+      )}
+
       {/* Cash Advances */}
       <SectionCard title="AVANCES DE EFECTIVO" icon={<CreditCard className="h-4 w-4" />} color="text-warning">
         {cashAdvances.length === 0 ? (
@@ -234,7 +264,7 @@ function CashClosePage() {
             <Row label="Posición COP" value={`${(openingCOP + copPurchased).toLocaleString()} COP`} bold />
           </div>
           <div className="border-t border-border pt-2">
-            <Row label="Ganancia Neta del Día" value={formatUSD(totalSalesUSD - totalExpensesUSD + totalCommissionUSD)} bold />
+            <Row label="Ganancia Neta del Día" value={formatUSD((totalSalesUSD + totalCommissionUSD + totalDebtCollectedUSD) - (totalExpensesUSD + Math.max(0, currencyPurchaseLossUSD)))} bold />
           </div>
         </CardContent>
       </Card>

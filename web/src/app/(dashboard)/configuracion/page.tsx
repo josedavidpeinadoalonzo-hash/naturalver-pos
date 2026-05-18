@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getTenantBusinessId } from "@/lib/tenant-query";
 import { useBusiness } from "@/lib/business-store";
-import { Settings, Save, MessageSquare, Users, Plus, Trash2 } from "lucide-react";
+import { Settings, Save, MessageSquare, Users, Plus, Trash2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { useEmployee } from "@/lib/employee-store";
 
 function ConfigPage() {
@@ -18,7 +19,9 @@ function ConfigPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [rifError, setRifError] = useState("");
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
   const [empName, setEmpName] = useState("");
   const [empPin, setEmpPin] = useState("");
@@ -32,6 +35,7 @@ function ConfigPage() {
 
   async function loadConfig() {
     if (!business) return;
+    setLoading(true);
     const { data } = await supabase.from("company_config").select("*").eq("business_id", business.id).limit(1).single();
     if (data) {
       setName(data.name || "");
@@ -40,10 +44,22 @@ function ConfigPage() {
       setPhone(data.phone || "");
       setEmail(data.email || "");
     }
+    setLoading(false);
+  }
+
+  function validateRIF(value: string): boolean {
+    const rifRegex = /^[VEJPGvejpg]-\d{5,9}(-\d)?$/;
+    if (!rifRegex.test(value.trim())) {
+      setRifError("Formato: V-12345678 o J-12345678-0");
+      return false;
+    }
+    setRifError("");
+    return true;
   }
 
   async function handleSave() {
     if (!business) return;
+    if (!validateRIF(rif)) return;
     setSaving(true);
     try {
       const { data: existing } = await supabase.from("company_config").select("id").eq("business_id", business.id).limit(1).single();
@@ -65,6 +81,15 @@ function ConfigPage() {
     setShowEmployeeForm(false);
   }
 
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Configuración</h1>
+        <SkeletonList count={3} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Configuración</h1>
@@ -80,8 +105,15 @@ function ConfigPage() {
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">RIF</label>
-            <input type="text" value={rif} onChange={(e) => setRif(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            <input type="text" value={rif}
+              onChange={(e) => { setRif(e.target.value); setRifError(""); }}
+              className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${rifError ? "border-danger" : "border-border"}`}
+              placeholder="Ej: J-12345678-0" />
+            {rifError && (
+              <p className="mt-1 text-xs text-danger flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" /> {rifError}
+              </p>
+            )}
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">Dirección Fiscal</label>
@@ -125,7 +157,7 @@ function ConfigPage() {
                   <div>
                     <p className="text-sm font-medium">{emp.name}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {emp.role === "admin" ? "Admin" : "Cajero"} · PIN: {emp.pin}
+                      {emp.role === "admin" ? "Admin" : "Cajero"}
                     </p>
                   </div>
                   <button

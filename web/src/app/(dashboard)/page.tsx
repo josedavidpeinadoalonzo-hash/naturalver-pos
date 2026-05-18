@@ -20,6 +20,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatUSD, formatBs } from "@/lib/utils";
+import { Skeleton, SkeletonList } from "@/components/ui/skeleton";
 
 const todayStart = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
 
@@ -42,7 +43,7 @@ function DashboardPage() {
       const businessId = getTenantBusinessId();
       const { data: sales } = await supabase
         .from("sales")
-        .select("total_amount_usd, product_name, created_at")
+        .select("total_amount_usd, product_name, created_at, quantity")
         .eq("business_id", businessId)
         .gte("created_at", todayStart)
         .order("created_at", { ascending: false });
@@ -53,7 +54,7 @@ function DashboardPage() {
         // Top product
         const counts: Record<string, number> = {};
         for (const s of sales) {
-          counts[s.product_name] = (counts[s.product_name] || 0) + 1;
+          counts[s.product_name] = (counts[s.product_name] || 0) + (s.quantity || 1);
         }
         const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
         if (top) setTopProduct(top[0]);
@@ -249,8 +250,16 @@ function DashboardPage() {
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-          Cargando datos...
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl bg-card p-4 border border-border">
+                <Skeleton className="h-4 w-20 mb-2" />
+                <Skeleton className="h-8 w-24" />
+              </div>
+            ))}
+          </div>
+          <SkeletonList count={5} />
         </div>
       )}
     </div>
