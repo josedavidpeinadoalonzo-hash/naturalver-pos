@@ -26,6 +26,14 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
 
   const rate = currency === "VES" ? exchangeRate : currency === "COP" ? (() => { try { return Number(localStorage.getItem("cop_rate") || "0"); } catch { return 0; } })() : 1;
 
+  function ivaFactor(): number {
+    return 1 + (ivaPercent || 0) / 100;
+  }
+
+  function finalUnitPrice(pres: { exento?: boolean; priceUSD: number }): number {
+    return pres.exento || !ivaPercent ? pres.priceUSD : pres.priceUSD * ivaFactor();
+  }
+
   function itemEffectivePrice(item: typeof items[0]): number {
     return item.presentation.priceUSD - (item.discount || 0);
   }
@@ -209,8 +217,8 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
           <div className="divide-y divide-gray-100">
             {items.map((item, idx) => {
               const discount = item.discount || 0;
-              const unitPrice = item.presentation.priceUSD;
-              const effectivePrice = unitPrice - discount;
+              const displayUnit = finalUnitPrice(item.presentation);
+              const effectivePrice = item.presentation.priceUSD - discount;
               const lineTotal = effectivePrice * item.quantity;
               return (
                 <div
@@ -224,7 +232,8 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
                         {item.presentation.exento && <span className="text-[10px] text-muted-foreground ml-1 font-normal">(E)</span>}
                       </p>
                       <p className="text-[11px] font-mono text-muted-foreground">
-                        {item.presentation.name} · {fmt(unitPrice)}
+                        {item.presentation.name} · {fmt(displayUnit)}
+                        {!item.presentation.exento && ivaPercent > 0 && <span className="text-success ml-1">IVA incl.</span>}
                         {discount > 0 && <span className="text-success ml-1">(-{fmt(discount)})</span>}
                       </p>
                     </div>

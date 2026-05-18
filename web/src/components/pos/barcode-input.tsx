@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, type KeyboardEvent } from "react";
-import { Camera } from "lucide-react";
+import { Search, Camera } from "lucide-react";
 import { playBeep } from "@/lib/beep";
 
 interface BarcodeInputProps {
@@ -57,24 +57,27 @@ export function BarcodeInput({ onBarcode, onOpenScanner }: BarcodeInputProps) {
 
   return (
     <div className="relative group" onClick={handleClick}>
+      <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+        <Search className="h-4 w-4" />
+      </div>
       <input
         ref={inputRef}
         type="text"
         value={value}
         onChange={(e) => handleChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={value ? value : "Escanea o escribe código..."}
-        className="w-full rounded-xl border-2 border-primary/30 bg-background px-4 py-3.5 text-center text-lg font-mono tracking-widest shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:shadow-lg transition-all"
+        placeholder="Buscar producto por nombre o código..."
+        className="w-full rounded-xl border-2 border-primary/30 bg-background pl-10 pr-12 py-3.5 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:shadow-lg transition-all"
         autoFocus
         autoComplete="off"
         spellCheck={false}
       />
       <button
         onClick={(e) => { e.stopPropagation(); onOpenScanner(); }}
-        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-2.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
         title="Escanear con cámara"
       >
-        <Camera className="h-5 w-5" />
+        <Camera className="h-4 w-4" />
       </button>
     </div>
   );

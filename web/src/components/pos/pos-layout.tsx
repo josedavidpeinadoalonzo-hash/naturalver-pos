@@ -15,7 +15,6 @@ import { getNextInvoiceNumber } from "@/lib/invoice";
 import { Check, CloudOff, History, RotateCcw, Pause, Play, Eye, X, Trash2, RefreshCw, DollarSign, User, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BarcodeInput } from "./barcode-input";
-import { Numpad } from "./numpad";
 import { ReceiptPanel } from "./receipt-panel";
 import { ProductPanel } from "./product-panel";
 import { PosPayment, type PosPaymentData } from "./pos-payment";
@@ -40,7 +39,6 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const { items, totalUSD, clearCart, addItem, globalDiscount, setGlobalDiscount } = useCart();
   const { employee } = useEmployee();
   const { business } = useBusiness();
-  const [quantity, setQuantity] = useState(1);
   const [priceTier, setPriceTier] = useState<PriceTier>("P1");
   const [currency, setCurrency] = useState<CurrencyCode>("VES");
   const [ivaPercent, setIvaPercent] = useState(16);
@@ -61,6 +59,39 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const [lastPayment, setLastPayment] = useState<PosPaymentData | null>(null);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [mobileQuery, setMobileQuery] = useState("");
+  const [showProductConfirm, setShowProductConfirm] = useState(false);
+  const [confirmProduct, setConfirmProduct] = useState<Product | null>(null);
+  const [confirmPres, setConfirmPres] = useState<Product["presentations"][0] | null>(null);
+  const [confirmQty, setConfirmQty] = useState(1);
+
+  function finalPrice(pres: Product["presentations"][0]): number {
+    return pres.exento || !ivaPercent ? pres.priceUSD : pres.priceUSD * (1 + ivaPercent / 100);
+  }
+
+  function openAddDialog(product: Product, preselectedPres?: Product["presentations"][0]) {
+    setConfirmProduct(product);
+    if (preselectedPres) {
+      setConfirmPres(preselectedPres);
+    } else if (product.presentations.length === 1) {
+      setConfirmPres(product.presentations[0]);
+    } else {
+      setConfirmPres(null);
+    }
+    setConfirmQty(1);
+    setShowProductConfirm(true);
+  }
+
+  function confirmAddToCart() {
+    if (!confirmProduct || !confirmPres) return;
+    for (let i = 0; i < confirmQty; i++) {
+      addItem(confirmProduct, confirmPres);
+    }
+    playBeep();
+    setShowProductConfirm(false);
+    setConfirmProduct(null);
+    setConfirmPres(null);
+    setConfirmQty(1);
+  }
 
   const mobileResults = useMemo(() => {
     if (!mobileQuery.trim()) return [];
@@ -127,21 +158,10 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
     return found;
   }
 
-  function addToCart(product: Product) {
-    const pres = product.presentations.length === 1
-      ? product.presentations[0]
-      : product.presentations[0];
-    for (let i = 0; i < quantity; i++) {
-      addItem(product, pres);
-    }
-    playBeep();
-    setQuantity(1);
-  }
-
   function handleBarcode(code: string) {
     const product = findProductByBarcode(code);
     if (product) {
-      addToCart(product);
+      openAddDialog(product);
     } else {
       playErrorBeep();
     }
@@ -519,14 +539,8 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
             </div>
 
             <div className="flex flex-1 gap-3 min-h-0">
-              {/* Numpad */}
+              {/* Held sales */}
               <div className="w-44 shrink-0">
-                <Numpad quantity={quantity} onChange={setQuantity} />
-                {quantity > 1 && (
-                  <p className="mt-1.5 text-center text-xs font-semibold text-warning bg-warning/10 rounded-lg py-1">
-                    Cantidad: {quantity}
-                  </p>
-                )}
                 {heldSales.length > 0 && (
                   <div className="mt-2 rounded-xl border-2 border-warning/30 bg-warning/5 p-2.5">
                     <p className="text-[10px] font-semibold text-warning mb-1.5 uppercase tracking-wider">Ventas en pausa</p>
@@ -557,9 +571,9 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
             <div className="flex-1 min-w-0">
               <ProductPanel
                 products={products}
-                quantity={quantity}
                 priceTier={priceTier}
                 onProductInfo={handleProductInfo}
+                onAddProduct={openAddDialog}
               />
             </div>
             </div>
@@ -637,31 +651,36 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
                     Ver todos
                   </button>
                 </div>
-                {mobileResults.length === 0 ? (
-                  <p className="py-12 text-center text-sm text-muted-foreground">Sin resultados</p>
-                ) : (
-                  <div className="space-y-1">
-                    {mobileResults.map((p) => {
-                      const pres = p.presentations[0];
-                      const price = pres ? formatUSD(pres.priceUSD) : "";
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => { addToCart(p); setMobileQuery(""); setShowMobileSearch(false); }}
-                          className="flex w-full items-center gap-3 rounded-xl border border-border/50 px-3 py-3 text-left text-sm hover:border-primary/40 hover:bg-muted/10 active:scale-[0.98] transition-all"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <span className="font-semibold block truncate">{p.name}</span>
-                            <span className="text-[10px] text-muted-foreground block truncate">
-                              {pres?.name || ""} · Stock: {pres?.stock || 0}und
-                            </span>
-                          </div>
-                          <span className="font-bold text-sm shrink-0">{price}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                    {mobileResults.length === 0 ? (
+                      <p className="py-12 text-center text-sm text-muted-foreground">Sin resultados</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {mobileResults.map((p) => {
+                          const pres = p.presentations[0];
+                          const display = pres ? formatUSD(finalPrice(pres)) : "";
+                          const multi = p.presentations.length > 1;
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => {
+                                openAddDialog(p);
+                                setShowMobileSearch(false);
+                              }}
+                              className="flex w-full items-center gap-3 rounded-xl border border-border/50 px-3 py-3 text-left text-sm hover:border-primary/40 hover:bg-muted/10 active:scale-[0.98] transition-all"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <span className="font-semibold block truncate">{p.name}</span>
+                                <span className="text-[10px] text-muted-foreground block truncate">
+                                  {pres?.name || ""} · Stock: {pres?.stock || 0}und
+                                  {multi && <span className="text-primary ml-1">+{p.presentations.length - 1} más</span>}
+                                </span>
+                              </div>
+                              <span className="font-bold text-sm shrink-0">{display}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
               </div>
             </div>
           )}
@@ -694,15 +713,12 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
 
         <div className="flex gap-2">
           <button
-            onClick={() => { setMobileQuery(""); setShowMobileSearch(true); }}
+            onClick={() => { setMobileQuery(""); setShowProductSearch(true); }}
             className="rounded-xl border-2 border-border/60 px-3 py-3 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all flex items-center gap-1.5"
           >
             <Search className="h-4 w-4" />
-            Buscar
+            Productos
           </button>
-          <div className="w-20 shrink-0">
-            <Numpad quantity={quantity} onChange={setQuantity} />
-          </div>
           <button
             onClick={() => setShowPayment(true)}
             className="flex-1 rounded-xl bg-gradient-to-r from-primary to-primary/90 px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:shadow-xl hover:opacity-95 active:scale-[0.98] transition-all"
@@ -724,9 +740,9 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           <div className="flex-1 min-h-0">
             <ProductPanel
               products={products}
-              quantity={quantity}
               priceTier={priceTier}
               onProductInfo={handleProductInfo}
+              onAddProduct={openAddDialog}
             />
           </div>
         </div>
@@ -843,11 +859,102 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
                   <div key={p.id} className="flex justify-between text-sm py-1.5 border-b border-border/20 last:border-0">
                     <span className="font-medium">{p.name}</span>
                     <span className={p.stock <= (p.lowStockThreshold || 5) ? "text-danger font-bold font-mono" : "text-success font-bold font-mono"}>
-                      {p.stock}und · ${p.priceUSD.toFixed(2)}
+                      {p.stock}und · ${finalPrice(p).toFixed(2)}
                     </span>
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add product confirmation dialog */}
+      {showProductConfirm && confirmProduct && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center md:justify-center" onClick={() => setShowProductConfirm(false)}>
+          <div className="w-full max-w-sm rounded-t-2xl bg-card p-5 md:rounded-2xl shadow-2xl animate-in slide-in-from-bottom" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold mb-1">{confirmProduct.name}</h3>
+            {confirmProduct.barcode && (
+              <p className="text-[11px] text-muted-foreground font-mono mb-3">Código: {confirmProduct.barcode}</p>
+            )}
+
+            {/* Presentation selector */}
+            {confirmProduct.presentations.length > 1 && (
+              <div className="mb-4">
+                <p className="text-xs text-muted-foreground mb-2 font-semibold">Presentación</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {confirmProduct.presentations.map((pres) => {
+                    const active = confirmPres?.id === pres.id;
+                    return (
+                      <button
+                        key={pres.id}
+                        onClick={() => setConfirmPres(pres)}
+                        className={`rounded-lg border-2 px-3 py-2 text-xs font-medium transition-all ${
+                          active
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border/60 text-muted-foreground hover:border-primary/40"
+                        }`}
+                      >
+                        <span className="block">{pres.name}</span>
+                        <span className="block text-[10px] opacity-70">Stock: {pres.stock}und</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Quantity selector */}
+            <div className="mb-4">
+              <p className="text-xs text-muted-foreground mb-2 font-semibold">Cantidad</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setConfirmQty(Math.max(1, confirmQty - 1))}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-border/60 text-lg font-bold hover:border-primary/40 hover:bg-muted/10 transition-all active:scale-90"
+                >
+                  -
+                </button>
+                <span className="w-12 text-center text-xl font-bold tabular-nums">{confirmQty}</span>
+                <button
+                  onClick={() => setConfirmQty(confirmQty + 1)}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-border/60 text-lg font-bold hover:border-primary/40 hover:bg-muted/10 transition-all active:scale-90"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Price info */}
+            {confirmPres && (
+              <div className="rounded-xl bg-muted/20 p-3 mb-4 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Precio unitario</span>
+                  <span className="font-bold">{formatUSD(finalPrice(confirmPres))}</span>
+                </div>
+                {confirmQty > 1 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Total</span>
+                    <span className="font-bold text-primary">{formatUSD(finalPrice(confirmPres) * confirmQty)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowProductConfirm(false)}
+                className="flex-1 rounded-xl border-2 border-border/60 py-3 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmAddToCart}
+                disabled={!confirmPres}
+                className="flex-1 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-40"
+              >
+                Agregar {confirmQty > 1 ? `(${confirmQty})` : ""}
+              </button>
             </div>
           </div>
         </div>

@@ -10,9 +10,10 @@ import { getPriceForTier, formatTierPrice } from "./price-selector";
 
 interface ProductPanelProps {
   products: Product[];
-  quantity: number;
+  quantity?: number;
   priceTier?: PriceTier;
   onProductInfo?: (product: Product) => void;
+  onAddProduct?: (product: Product) => void;
 }
 
 const ALL = "todas";
@@ -57,7 +58,7 @@ function ProductImage({ url, name }: { url?: string; name: string }) {
   );
 }
 
-export function ProductPanel({ products, quantity, priceTier, onProductInfo }: ProductPanelProps) {
+export function ProductPanel({ products, quantity = 1, priceTier, onProductInfo, onAddProduct }: ProductPanelProps) {
   const { addItem } = useCart();
   const [category, setCategory] = useState(ALL);
   const [search, setSearch] = useState("");
@@ -80,7 +81,9 @@ export function ProductPanel({ products, quantity, priceTier, onProductInfo }: P
   }, [products, search, category]);
 
   function handleSelect(p: Product) {
-    if (p.presentations.length === 1) {
+    if (onAddProduct) {
+      onAddProduct(p);
+    } else if (p.presentations.length === 1) {
       addItemWithQty(p, p.presentations[0], quantity);
     } else {
       setPicker({ product: p });
