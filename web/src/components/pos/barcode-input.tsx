@@ -7,9 +7,10 @@ import { playBeep } from "@/lib/beep";
 interface BarcodeInputProps {
   onBarcode: (code: string) => void;
   onOpenScanner: () => void;
+  onSearchChange?: (value: string) => void;
 }
 
-export function BarcodeInput({ onBarcode, onOpenScanner }: BarcodeInputProps) {
+export function BarcodeInput({ onBarcode, onOpenScanner, onSearchChange }: BarcodeInputProps) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -21,6 +22,7 @@ export function BarcodeInput({ onBarcode, onOpenScanner }: BarcodeInputProps) {
 
   function handleChange(val: string) {
     setValue(val);
+    onSearchChange?.(val);
     const now = Date.now();
     const isScanner = val.length > 0 && (lastCharTime.current === 0 || now - lastCharTime.current < 30);
     lastCharTime.current = now;
@@ -32,6 +34,7 @@ export function BarcodeInput({ onBarcode, onOpenScanner }: BarcodeInputProps) {
         playBeep();
         onBarcode(val);
         setValue("");
+        onSearchChange?.("");
         inputRef.current?.focus();
       }, 80);
     }
@@ -43,10 +46,12 @@ export function BarcodeInput({ onBarcode, onOpenScanner }: BarcodeInputProps) {
       playBeep();
       onBarcode(value.trim());
       setValue("");
+      onSearchChange?.("");
       inputRef.current?.focus();
     }
     if (e.key === "Escape") {
       setValue("");
+      onSearchChange?.("");
       inputRef.current?.focus();
     }
   }

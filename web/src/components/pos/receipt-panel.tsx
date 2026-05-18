@@ -41,9 +41,9 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
   function itemFinalUnitPrice(item: typeof items[0]): number {
     const base = item.presentation.priceUSD;
     const discount = item.discount || 0;
-    const finalBase = base * ivaFactor();
-    const finalDiscount = discount * ivaFactor();
-    return finalBase - finalDiscount;
+    if (item.presentation.exento || !ivaPercent) return base - discount;
+    const factor = ivaFactor();
+    return base * factor - discount * factor;
   }
 
   function itemLineTotal(item: typeof items[0]): number {

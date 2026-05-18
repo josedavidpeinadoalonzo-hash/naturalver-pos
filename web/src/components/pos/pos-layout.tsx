@@ -63,6 +63,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const [confirmProduct, setConfirmProduct] = useState<Product | null>(null);
   const [confirmPres, setConfirmPres] = useState<Product["presentations"][0] | null>(null);
   const [confirmQty, setConfirmQty] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
 
   function finalPrice(pres: Product["presentations"][0]): number {
     return pres.exento || !ivaPercent ? pres.priceUSD : pres.priceUSD * (1 + ivaPercent / 100);
@@ -102,6 +103,16 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
         p.barcode?.toLowerCase().includes(q)
     );
   }, [products, mobileQuery]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) return [];
+    const q = searchQuery.toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.barcode?.toLowerCase().includes(q)
+    );
+  }, [products, searchQuery]);
 
   const ivaAmount = useMemo(() => {
     const taxable = items
@@ -162,9 +173,17 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
     const product = findProductByBarcode(code);
     if (product) {
       openAddDialog(product);
+      setSearchQuery("");
     } else {
       playErrorBeep();
     }
+  }
+
+  function handleSearchChange(val: string) {
+    setSearchQuery(val);
+    setMobileQuery(val);
+    if (val.length >= 1) setShowMobileSearch(true);
+    if (val.length === 0) setShowMobileSearch(false);
   }
 
   function handleOpenScanner() {
@@ -513,7 +532,34 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           <div className="flex flex-1 flex-col gap-3 min-w-0">
             {/* Toolbar */}
             <div className="flex items-center gap-2">
-              <BarcodeInput onBarcode={handleBarcode} onOpenScanner={handleOpenScanner} />
+              <div className="relative flex-1">
+                <BarcodeInput onBarcode={handleBarcode} onOpenScanner={handleOpenScanner} onSearchChange={handleSearchChange} />
+                {searchResults.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-xl border-2 border-border bg-background shadow-2xl animate-in fade-in slide-in-from-top-1">
+                    {searchResults.map((p) => {
+                      const pres = p.presentations[0];
+                      const display = pres ? formatUSD(finalPrice(pres)) : "";
+                      const multi = p.presentations.length > 1;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => { openAddDialog(p); setSearchQuery(""); }}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/10 border-b border-border/30 last:border-0 transition-colors"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <span className="font-semibold block truncate">{p.name}</span>
+                            <span className="text-[11px] text-muted-foreground block truncate">
+                              {pres?.name || ""} · Stock: {pres?.stock || 0}und
+                              {multi && <span className="text-primary ml-1">+{p.presentations.length - 1} más</span>}
+                            </span>
+                          </div>
+                          <span className="font-bold text-sm shrink-0">{display}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleHoldSale}
                 disabled={items.length === 0}
@@ -593,7 +639,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
 
         <div className="flex items-center gap-1">
           <div className="flex-1">
-            <BarcodeInput onBarcode={handleBarcode} onOpenScanner={handleOpenScanner} />
+            <BarcodeInput onBarcode={handleBarcode} onOpenScanner={handleOpenScanner} onSearchChange={handleSearchChange} />
           </div>
           <button
             onClick={handleHoldSale}

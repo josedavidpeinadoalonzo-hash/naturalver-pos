@@ -130,7 +130,22 @@ function ProductEditPage() {
 
   function updatePresentation(id: string, field: keyof ProductPresentation, value: any) {
     setPresentations((prev) => {
-      const updated = prev.map((p) => (p.id === id ? { ...p, [field]: value } : p));
+      const updated = prev.map((p) => {
+        if (p.id !== id) return p;
+        const next = { ...p, [field]: value };
+        const recalc = field === "priceUSD" || field === "exento";
+        if (recalc) {
+          const bcvRate = Number(localStorage.getItem("bcv_rate") || "0");
+          const copRate = Number(localStorage.getItem("cop_rate") || "0");
+          const exento = field === "exento" ? Boolean(value) : p.exento;
+          const factor = exento || ivaPercent === 0 ? 1 : 1 + ivaPercent / 100;
+          const priceUSD = field === "priceUSD" ? Number(value) : p.priceUSD;
+          const baseUSD = priceUSD / factor;
+          if (bcvRate > 0) next.priceBs = Math.round(baseUSD * bcvRate * 100) / 100;
+          if (copRate > 0) next.priceCop = Math.round(baseUSD * copRate * 100) / 100;
+        }
+        return next;
+      });
       if (field === "stock" && updated[0]?.id === id) {
         setQuantity(value);
       }
