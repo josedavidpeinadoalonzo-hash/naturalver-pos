@@ -38,11 +38,23 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
     return item.presentation.priceUSD - (item.discount || 0);
   }
 
+  function itemFinalUnitPrice(item: typeof items[0]): number {
+    const base = item.presentation.priceUSD;
+    const discount = item.discount || 0;
+    const finalBase = base * ivaFactor();
+    const finalDiscount = discount * ivaFactor();
+    return finalBase - finalDiscount;
+  }
+
   function itemLineTotal(item: typeof items[0]): number {
-    return itemEffectivePrice(item) * item.quantity;
+    return itemFinalUnitPrice(item) * item.quantity;
   }
 
   function subtotal(): number {
+    return items.reduce((s, i) => s + itemFinalUnitPrice(i) * i.quantity, 0);
+  }
+
+  function baseSubtotal(): number {
     return items.reduce((s, i) => s + i.presentation.priceUSD * i.quantity, 0);
   }
 
@@ -105,7 +117,7 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
     lines.push("");
 
     items.forEach((item) => {
-      const uPrice = itemEffectivePrice(item);
+      const uPrice = itemFinalUnitPrice(item);
       const total = uPrice * item.quantity;
       const ex = item.presentation.exento ? " (E)" : "";
       const name = (item.product.name + ex).substring(0, W);
@@ -113,24 +125,27 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
       lines.push(name);
       lines.push(" ".repeat(Math.max(0, W - line.length)) + line);
       if (item.discount) {
-        lines.push(`  Desc: -${fmt(item.discount * item.quantity)}`);
+        lines.push(`  Desc: -${fmt((item.discount || 0) * ivaFactor() * item.quantity)}`);
       }
     });
 
     lines.push("");
     lines.push("-".repeat(W));
-    lines.push(`BASE IMPONIBLE:${fmt(taxableTotal).padStart(W - 14)}`);
+    const finalSubtotal = items.reduce((s, i) => s + itemFinalUnitPrice(i) * i.quantity, 0);
+    lines.push(`SUBTOTAL:      ${fmt(finalSubtotal).padStart(W - 14)}`);
+    if (taxableTotal > 0) {
+      lines.push(`BASE IMPONIBLE:${fmt(taxableTotal).padStart(W - 14)}`);
+    }
     if (exemptTotal > 0) {
       lines.push(`EXENTO:        ${fmt(exemptTotal).padStart(W - 14)}`);
     }
     if (tax > 0) {
       lines.push(`IVA (${ivaPercent}%):   ${fmt(tax).padStart(W - 14)}`);
     }
-    lines.push(`SUBTOTAL:      ${fmt(taxableTotal + exemptTotal).padStart(W - 14)}`);
     if (globalDiscount > 0) {
       lines.push(`DESCUENTO:    -${fmt(globalDiscount).padStart(W - 15)}`);
     }
-    lines.push(`TOTAL:         ${fmt(totalUSD + tax).padStart(W - 14)}`);
+    lines.push(`TOTAL:         ${fmt(finalSubtotal - globalDiscount).padStart(W - 14)}`);
 
     if (lastPayment) {
       lines.push("-".repeat(W));
@@ -218,7 +233,7 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
             {items.map((item, idx) => {
               const discount = item.discount || 0;
               const displayUnit = finalUnitPrice(item.presentation);
-              const effectivePrice = item.presentation.priceUSD - discount;
+              const effectivePrice = itemFinalUnitPrice(item);
               const lineTotal = effectivePrice * item.quantity;
               return (
                 <div
@@ -307,10 +322,16 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
           </div>
 
           {ivaPercent > 0 && ivaAmt !== undefined && ivaAmt > 0 && (
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>IVA ({ivaPercent}%)</span>
-              <span className="tabular-nums font-mono font-medium">{fmt(ivaAmt)}</span>
-            </div>
+            <>
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Base Imponible</span>
+                <span className="tabular-nums font-mono font-medium">{fmt(baseSubtotal())}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>IVA ({ivaPercent}%)</span>
+                <span className="tabular-nums font-mono font-medium">{fmt(ivaAmt)}</span>
+              </div>
+            </>
           )}
 
           <div className="flex items-center justify-between text-sm">
