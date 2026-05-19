@@ -15,6 +15,8 @@ interface PosPaymentProps {
   onClose: () => void;
   totalWithIVA?: number;
   ivaAmount?: number;
+  customerName?: string;
+  customerRif?: string;
 }
 
 export type PosPaymentType =
@@ -58,7 +60,7 @@ const PAYMENT_OPTIONS: { type: PosPaymentType; label: string; icon: typeof Bankn
   { type: "mixto", label: "Mixto", icon: Shuffle, color: "from-orange-500 to-orange-600" },
 ];
 
-export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose, totalWithIVA, ivaAmount }: PosPaymentProps) {
+export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose, totalWithIVA, ivaAmount, customerName: initialCustomerName = "", customerRif: initialCustomerRif = "" }: PosPaymentProps) {
   const { totalUSD, clearCart } = useCart();
   const effectiveTotal = totalWithIVA !== undefined ? totalWithIVA : totalUSD;
   const totalBS = effectiveTotal * exchangeRate;
@@ -66,8 +68,8 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
   const [cashReceivedBS, setCashReceivedBS] = useState(totalBS);
   const [cashReceivedUSD, setCashReceivedUSD] = useState(effectiveTotal);
   const [mobileBS, setMobileBS] = useState(totalBS);
-  const [customerName, setCustomerName] = useState("");
-  const [customerRif, setCustomerRif] = useState("");
+  const [customerName, setCustomerName] = useState(initialCustomerName);
+  const [customerRif, setCustomerRif] = useState(initialCustomerRif);
   const [customerEmail, setCustomerEmail] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentBank, setPaymentBank] = useState("");
@@ -528,27 +530,37 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
           )}
 
           {/* Customer section */}
-          <div className="space-y-2 rounded-xl bg-muted/5 p-4 border border-border/40">
+          <div className={`space-y-2 rounded-xl p-4 border transition-all ${
+            customerName ? "bg-primary/[0.03] border-primary/30" : "bg-muted/5 border-border/40"
+          }`}>
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cliente</label>
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cliente</label>
+                {customerName && (
+                  <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                    {customerName}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => { setShowCustomerSearch(!showCustomerSearch); setCustomerQuery(""); }}
-                className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
               >
-                <Users className="h-3.5 w-3.5" /> {showCustomerSearch ? "Cerrar" : "Buscar"}
+                <Search className="h-3.5 w-3.5" /> {showCustomerSearch ? "Cerrar" : customerName ? "Cambiar" : "Buscar"}
               </button>
             </div>
 
             {showCustomerSearch && (
-              <div className="mb-2">
+              <div className="animate-in fade-in slide-in-from-top-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <input
                     type="text"
                     value={customerQuery}
                     onChange={(e) => setCustomerQuery(e.target.value)}
                     placeholder="Nombre, RIF o teléfono..."
-                    className="w-full rounded-lg border-2 border-border/60 bg-background pl-10 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    className="w-full rounded-lg border-2 border-border/60 bg-background pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                     autoFocus
                   />
                 </div>
@@ -558,44 +570,61 @@ export function PosPayment({ exchangeRate, cashDiscount = 0, onConfirm, onClose,
                       <button
                         key={c.id}
                         onClick={() => selectCustomer(c)}
-                        className="w-full px-4 py-3 text-left text-sm hover:bg-primary/5 border-b border-border/40 last:border-0 transition-colors"
+                        className="w-full px-4 py-3 text-left text-sm hover:bg-primary/5 border-b border-border/40 last:border-0 transition-all flex items-center justify-between"
                       >
-                        <span className="font-semibold">{c.name}</span>
-                        {c.id_card && <span className="ml-2 text-xs text-muted-foreground font-mono">{c.id_card}</span>}
-                        {c.phone && <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>}
+                        <div>
+                          <span className="font-semibold">{c.name}</span>
+                          {c.id_card && <span className="ml-2 text-xs text-muted-foreground font-mono">{c.id_card}</span>}
+                        </div>
+                        {c.phone && <span className="text-xs text-muted-foreground">{c.phone}</span>}
                       </button>
                     ))}
                   </div>
                 )}
                 {customerQuery && customerResults.length === 0 && (
-                  <p className="mt-1.5 text-xs text-muted-foreground">Sin resultados</p>
+                  <p className="mt-1.5 text-xs text-muted-foreground text-center py-2">Sin resultados</p>
+                )}
+                {customerName && (
+                  <button
+                    onClick={() => { setCustomerName(""); setCustomerRif(""); setCustomerEmail(""); }}
+                    className="mt-1.5 w-full rounded-lg py-1.5 text-xs font-semibold text-muted-foreground hover:text-danger hover:bg-danger/5 transition-all border border-dashed border-border/60"
+                  >
+                    Quitar cliente
+                  </button>
                 )}
               </div>
             )}
 
             <div className="flex gap-2">
-              <input
-                type="text"
-                value={customerRif}
-                onChange={(e) => setCustomerRif(e.target.value.toUpperCase())}
-                placeholder="RIF"
-                className="w-1/3 rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-              />
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Nombre del cliente"
-                className="flex-1 rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-              />
+              <div className="w-1/3">
+                <label className="block text-[10px] text-muted-foreground mb-0.5 font-medium">RIF</label>
+                <input
+                  type="text"
+                  value={customerRif}
+                  onChange={(e) => setCustomerRif(e.target.value.toUpperCase())}
+                  placeholder="J-XXXXXXXX-X"
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2 text-sm font-mono focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-[10px] text-muted-foreground mb-0.5 font-medium">Nombre</label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Nombre del cliente"
+                  className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
             </div>
-            <div className="flex gap-2">
+            <div>
+              <label className="block text-[10px] text-muted-foreground mb-0.5 font-medium">Email (opcional)</label>
               <input
                 type="email"
                 value={customerEmail}
                 onChange={(e) => setCustomerEmail(e.target.value)}
-                placeholder="Email para factura (opcional)"
-                className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                placeholder="correo@ejemplo.com"
+                className="w-full rounded-lg border-2 border-border/60 bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
               />
             </div>
           </div>

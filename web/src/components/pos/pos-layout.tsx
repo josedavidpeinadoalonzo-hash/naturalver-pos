@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { Product } from "@/lib/models";
 import { useCart } from "@/lib/cart-store";
 import { supabase } from "@/lib/supabase/client";
@@ -12,7 +12,7 @@ import { syncPendingSales } from "@/lib/offline/sync";
 import { formatUSD } from "@/lib/utils";
 import { playBeep, playErrorBeep } from "@/lib/beep";
 import { getNextInvoiceNumber } from "@/lib/invoice";
-import { Check, CloudOff, History, RotateCcw, Pause, Play, Eye, X, Trash2, RefreshCw, DollarSign, User, Search } from "lucide-react";
+import { Check, CloudOff, History, RotateCcw, Pause, Play, Eye, X, Trash2, RefreshCw, DollarSign, User, Search, CalendarDays, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BarcodeInput } from "./barcode-input";
 import { ReceiptPanel } from "./receipt-panel";
@@ -64,6 +64,14 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
   const [confirmPres, setConfirmPres] = useState<Product["presentations"][0] | null>(null);
   const [confirmQty, setConfirmQty] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [todaySalesTotal, setTodaySalesTotal] = useState(0);
+  const [todaySalesCount, setTodaySalesCount] = useState(0);
+  const [todayLoading, setTodayLoading] = useState(true);
+  const [customerName, setCustomerName] = useState("");
+  const [customerRif, setCustomerRif] = useState("");
+  const [showCustomerSelect, setShowCustomerSelect] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customerResults, setCustomerResults] = useState<any[]>([]);
 
   function finalPrice(pres: Product["presentations"][0]): number {
     return pres.exento || !ivaPercent ? pres.priceUSD : pres.priceUSD * (1 + ivaPercent / 100);
@@ -103,6 +111,34 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
         p.barcode?.toLowerCase().includes(q)
     );
   }, [products, mobileQuery]);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "F2") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (e.key === "F8" && !showPayment && items.length > 0) {
+        e.preventDefault();
+        setShowPayment(true);
+      }
+      if (e.key === "Escape" && !showPayment) {
+        if (showCustomerSelect) { setShowCustomerSelect(false); setCustomerQuery(""); return; }
+        if (showProductConfirm) { setShowProductConfirm(false); return; }
+        if (showHistory) { setShowHistory(false); return; }
+        if (showReturns) { setShowReturns(false); return; }
+        if (showStockInfo) { setShowStockInfo(null); return; }
+      }
+      if ((e.key === "F4" || e.key === "F5") && items.length > 0) {
+        e.preventDefault();
+        handleHoldSale();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [items, showPayment, showCustomerSelect, showProductConfirm, showHistory, showReturns, showStockInfo]);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim() || searchQuery.trim().length < 2) return [];
@@ -145,6 +181,32 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
       if (data?.value && Number(data.value) > 0) setIvaPercent(Number(data.value));
     } catch {}
   }
+
+  async function fetchTodaySales() {
+    try {
+      setTodayLoading(true);
+      const bid = await getTenantBusinessId();
+      const today = new Date().toISOString().split("T")[0];
+      const { data } = await supabase
+        .from("sales")
+        .select("total_amount_usd")
+        .eq("business_id", bid)
+        .gte("created_at", today)
+        .lt("created_at", today + "T23:59:59.999Z");
+      let total = 0;
+      if (data) for (const r of data) total += Number(r.total_amount_usd) || 0;
+      setTodaySalesTotal(total);
+      setTodaySalesCount(data?.length || 0);
+    } catch {} finally {
+      setTodayLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchTodaySales();
+    const interval = setInterval(fetchTodaySales, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   function loadHeldSales() {
     try {
@@ -444,6 +506,33 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
     setShowStockInfo(product);
   }
 
+  const customerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!showCustomerSelect || !customerQuery.trim()) {
+      setCustomerResults([]);
+      return;
+    }
+    if (customerTimerRef.current) clearTimeout(customerTimerRef.current);
+    customerTimerRef.current = setTimeout(async () => {
+      const bid = await getTenantBusinessId();
+      const q = customerQuery.trim();
+      const { data } = await supabase
+        .from("customers")
+        .select("id, name, id_card, phone, email")
+        .eq("business_id", bid)
+        .or(`name.ilike.%${q}%,id_card.ilike.%${q}%,phone.ilike.%${q}%`)
+        .limit(10);
+      setCustomerResults(data || []);
+    }, 200);
+  }, [customerQuery, showCustomerSelect]);
+
+  function selectCustomer(c: any) {
+    setCustomerName(c.name);
+    setCustomerRif(c.id_card || "");
+    setShowCustomerSelect(false);
+    setCustomerQuery("");
+  }
+
   if (confirmed) {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-4">
@@ -491,6 +580,30 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Today's sales summary */}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-primary/5 rounded-lg px-2.5 py-1.5 border border-primary/20">
+              <CalendarDays className="h-3.5 w-3.5 text-primary" />
+              <span className="text-primary font-semibold">Hoy: </span>
+              {todayLoading ? (
+                <span className="text-[10px] text-muted-foreground">...</span>
+              ) : (
+                <span><strong className="text-foreground">{formatUSD(todaySalesTotal)}</strong> <span className="text-[10px]">({todaySalesCount} ventas)</span></span>
+              )}
+            </div>
+
+            {/* Customer quick-select */}
+            <button
+              onClick={() => setShowCustomerSelect(!showCustomerSelect)}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all border ${
+                customerName
+                  ? "bg-primary/10 text-primary border-primary/30"
+                  : "bg-muted/20 text-muted-foreground border-border/60 hover:border-primary/40 hover:text-foreground"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span className="max-w-[120px] truncate">{customerName || "Cliente"}</span>
+            </button>
+
             <CurrencySelector
               active={currency}
               onChange={setCurrency}
@@ -512,6 +625,55 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
             )}
           </div>
         </div>
+
+        {/* Customer quick-select dropdown */}
+        {showCustomerSelect && (
+          <div className="relative z-30 mb-2">
+            <div className="absolute left-[400px] top-0 w-80 rounded-xl border-2 border-border bg-card shadow-2xl animate-in fade-in slide-in-from-top-1 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Seleccionar Cliente</span>
+                <button onClick={() => { setShowCustomerSelect(false); setCustomerQuery(""); }} className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-colors">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="relative mb-2">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={customerQuery}
+                  onChange={(e) => setCustomerQuery(e.target.value)}
+                  placeholder="Nombre, RIF o teléfono..."
+                  className="w-full rounded-lg border-2 border-border/60 bg-background pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  autoFocus
+                />
+              </div>
+              {customerResults.length > 0 && (
+                <div className="max-h-48 overflow-y-auto space-y-0.5">
+                  {customerResults.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => selectCustomer(c)}
+                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-primary/5 rounded-lg border border-transparent hover:border-primary/20 transition-all"
+                    >
+                      <span className="font-semibold">{c.name}</span>
+                      {c.id_card && <span className="ml-2 text-xs text-muted-foreground font-mono">{c.id_card}</span>}
+                      {c.phone && <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {customerQuery && customerResults.length === 0 && (
+                <p className="text-xs text-muted-foreground py-2 text-center">Sin resultados</p>
+              )}
+              <button
+                onClick={() => { setCustomerName(""); setCustomerRif(""); setShowCustomerSelect(false); }}
+                className="mt-1.5 w-full rounded-lg py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/20 transition-all border border-dashed border-border/60"
+              >
+                Sin cliente
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-1 gap-3 min-h-0">
           {/* Left: Receipt */}
@@ -631,9 +793,13 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
       <div className="md:hidden flex flex-col h-[calc(100vh-10rem)] gap-2">
         <div className="flex items-center justify-between px-1">
           <h2 className="text-sm font-bold">{business?.name || "POS"}</h2>
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            <span>Tasa: Bs {exchangeRate.toFixed(2)}</span>
-            {employee?.name && <span>· {employee.name}</span>}
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <span className="text-primary font-semibold">
+              Hoy: {todayLoading ? "..." : `${formatUSD(todaySalesTotal)} (${todaySalesCount})`}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span>Bs {exchangeRate.toFixed(2)}</span>
+            {employee?.name && <><span className="text-muted-foreground">·</span><span>{employee.name}</span></>}
           </div>
         </div>
 
@@ -1023,6 +1189,8 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
           onClose={() => setShowPayment(false)}
           totalWithIVA={totalWithIVA}
           ivaAmount={ivaAmount}
+          customerName={customerName}
+          customerRif={customerRif}
         />
       )}
     </>

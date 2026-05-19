@@ -138,15 +138,16 @@ export function ProductPanel({ products, quantity = 1, priceTier, onProductInfo,
             <p>Sin resultados</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2">
             {filtered.map((p) => {
               const minStock = Math.min(...p.presentations.map((pr) => pr.stock));
               const anyLow = p.presentations.some((pr) => isLowStock(pr));
+              const lowestPrice = Math.min(...p.presentations.map((pr) => getPriceForTier(pr, priceTier || "P1")));
               return (
                 <button
                   key={p.id}
                   onClick={() => handleSelect(p)}
-                  className="flex flex-col rounded-xl border border-border/60 bg-card shadow-sm hover:shadow-lg hover:border-primary/40 active:scale-[0.98] transition-all relative group overflow-hidden"
+                  className="flex flex-col rounded-xl border-2 border-border/50 bg-card shadow-sm hover:shadow-lg hover:border-primary/40 active:scale-[0.98] transition-all relative group overflow-hidden"
                 >
                   {p.image_url && (
                     <ProductImage url={p.image_url} name={p.name} />
@@ -162,39 +163,62 @@ export function ProductPanel({ products, quantity = 1, priceTier, onProductInfo,
                   )}
                   <div className="flex flex-col p-2.5 flex-1">
                     <div className="flex items-start justify-between gap-1">
-                      <span className="text-xs font-bold leading-tight line-clamp-2 flex-1 text-left">
+                      <span className="text-xs font-bold leading-tight line-clamp-2 flex-1 text-left text-gray-800">
                         {p.name}
                       </span>
                       {anyLow && (
                         <AlertTriangle className="h-3.5 w-3.5 text-danger shrink-0 mt-0.5" />
                       )}
                     </div>
-                    <span className="mt-1 self-start rounded-md px-1.5 py-0.5 text-[10px] font-medium border {getCategoryColor(p.category)}">
-                      {p.category}
-                    </span>
+
+                    {/* Price badge */}
+                    <div className="mt-1.5">
+                      <span className="inline-block rounded-lg bg-primary/10 text-primary px-2 py-0.5 text-xs font-bold tabular-nums">
+                        {formatTierPrice(lowestPrice, priceTier || "P1")}
+                      </span>
+                      {p.presentations.length > 1 && (
+                        <span className="ml-1 text-[9px] text-muted-foreground font-medium">
+                          desde
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Category + stock */}
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-semibold border ${getCategoryColor(p.category)}`}>
+                        {p.category}
+                      </span>
+                      {anyLow && (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] text-danger font-semibold">
+                          <span className="w-1 h-1 rounded-full bg-danger animate-pulse" />
+                          {minStock}und
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Presentations */}
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {p.presentations.slice(0, 2).map((pr) => {
                         const tierPrice = getPriceForTier(pr, priceTier || "P1");
                         return (
                           <span
                             key={pr.id}
-                            className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${
                               isLowStock(pr)
-                                ? "bg-danger/10 text-danger"
-                                : "bg-primary/10 text-primary"
+                                ? "bg-danger/5 text-danger"
+                                : "bg-muted/20 text-muted-foreground"
                             }`}
                           >
-                            {pr.name} {formatTierPrice(tierPrice, priceTier || "P1")}
+                            {pr.name}
                           </span>
                         );
                       })}
+                      {p.presentations.length > 2 && (
+                        <span className="text-[9px] text-muted-foreground self-center font-medium">
+                          +{p.presentations.length - 2}
+                        </span>
+                      )}
                     </div>
-                    {anyLow && (
-                      <div className="mt-1.5 flex items-center gap-1 text-[10px] text-danger font-medium">
-                        <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" />
-                        Stock bajo ({minStock}und)
-                      </div>
-                    )}
                   </div>
                 </button>
               );
