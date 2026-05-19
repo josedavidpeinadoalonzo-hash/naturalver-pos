@@ -142,7 +142,7 @@ export function PosLayout({ products, exchangeRate: initialRate, cashDiscount = 
         .eq("business_id", bid)
         .eq("key", "iva_percent")
         .single();
-      if (data?.value) setIvaPercent(Number(data.value));
+      if (data?.value && Number(data.value) > 0) setIvaPercent(Number(data.value));
     } catch {}
   }
 
