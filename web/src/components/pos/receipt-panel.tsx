@@ -82,17 +82,23 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
     const bPhone = business?.phone || localStorage.getItem("business_phone") || "";
     const invoiceNumber = localStorage.getItem("last_invoice_number") || "";
     const controlNumber = localStorage.getItem("last_control_number") || "";
+    const lastName = lastPayment?.customerName || localStorage.getItem("last_customer_name") || "";
+    const lastRif = lastPayment?.customerRif || localStorage.getItem("last_customer_rif") || "";
 
+    const tax = ivaAmount();
+    const baseTotal = items
+      .reduce((s, i) => s + Math.max(0, i.presentation.priceUSD - (i.discount || 0)) * i.quantity, 0);
     const taxableTotal = items
       .filter((i) => !i.presentation.exento)
-      .reduce((s, i) => s + itemEffectivePrice(i) * i.quantity, 0);
+      .reduce((s, i) => s + Math.max(0, i.presentation.priceUSD - (i.discount || 0)) * i.quantity, 0);
     const exemptTotal = items
       .filter((i) => i.presentation.exento)
-      .reduce((s, i) => s + itemEffectivePrice(i) * i.quantity, 0);
-    const tax = ivaAmount();
+      .reduce((s, i) => s + Math.max(0, i.presentation.priceUSD - (i.discount || 0)) * i.quantity, 0);
+    const finalSubtotal = items.reduce((s, i) => s + itemFinalUnitPrice(i) * i.quantity, 0);
+    const totalAfterDiscount = Math.max(0, finalSubtotal - globalDiscount);
 
     const lines: string[] = [];
-    const W = 32;
+    const W = 36;
 
     function center(text: string) {
       const pad = Math.max(0, W - text.length);
@@ -100,95 +106,127 @@ export function ReceiptPanel({ onCheckout, currency = "VES", ivaPercent = 0, exc
       return " ".repeat(left) + text;
     }
 
+    function rPad(text: string, width: number): string {
+      return text.padStart(width);
+    }
+
+    // ── Header ──
     lines.push(center(bName));
     if (bRif) lines.push(center(`RIF: ${bRif}`));
-    if (bAddr) lines.push(center(bAddr));
+    if (bAddr) lines.push(center(bAddr.length > W ? bAddr.substring(0, W) : bAddr));
     if (bPhone) lines.push(center(`Telf: ${bPhone}`));
     lines.push("=".repeat(W));
 
     if (invoiceNumber) {
-      lines.push(center(`Factura N°: ${invoiceNumber}`));
-      lines.push(center(`N° Control: ${controlNumber}`));
+      lines.push(`FACTURA N°: ${invoiceNumber}`);
+      lines.push(`N° CONTROL: ${controlNumber}`);
       lines.push(center("AUTORIZADO SENIAT"));
       lines.push("=".repeat(W));
     }
 
-    lines.push(new Date().toLocaleString());
+    lines.push(new Date().toLocaleString("es-VE", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit",
+    }));
     lines.push("");
 
+    // ── Customer ──
+    if (lastName || lastRif) {
+      if (lastName) lines.push(`CLIENTE: ${lastName.substring(0, W - 9)}`);
+      if (lastRif) lines.push(`RIF/C.I: ${lastRif}`);
+      lines.push("-".repeat(W));
+    }
+
+    // ── Items ──
     items.forEach((item) => {
-      const uPrice = itemFinalUnitPrice(item);
-      const total = uPrice * item.quantity;
+      const basePrice = Math.max(0, item.presentation.priceUSD - (item.discount || 0));
+      const finalPrice = itemFinalUnitPrice(item);
+      const lineTotal = finalPrice * item.quantity;
       const ex = item.presentation.exento ? " (E)" : "";
-      const name = (item.product.name + ex).substring(0, W);
-      const line = `${item.quantity} x ${fmt(uPrice).padStart(7)}  ${fmt(total).padStart(7)}`;
+      const name = (item.product.name + ex).substring(0, 28);
       lines.push(name);
-      lines.push(" ".repeat(Math.max(0, W - line.length)) + line);
+      const qty = `${item.quantity}`;
+      const unitFmt = fmt(basePrice);
+      const totalFmt = fmt(lineTotal);
+      const line = `  ${qty} x ${unitFmt.padStart(9)}  ${totalFmt.padStart(9)}`;
+      lines.push(line);
       if (item.discount) {
-        lines.push(`  Desc: -${fmt((item.discount || 0) * ivaFactor() * item.quantity)}`);
+        const dAmt = (item.discount * ivaFactor() * item.quantity);
+        lines.push(`       Desc: -${fmt(dAmt).padStart(9)}`);
       }
     });
 
     lines.push("");
-    lines.push("-".repeat(W));
-    const finalSubtotal = items.reduce((s, i) => s + itemFinalUnitPrice(i) * i.quantity, 0);
-    lines.push(`SUBTOTAL:      ${fmt(finalSubtotal).padStart(W - 14)}`);
+    lines.push("=".repeat(W));
+
+    // ── Summary ──
+    const labelW = 18;
+    const valW = W - labelW;
+    const baseBeforeDiscount = items.reduce((s, i) => s + Math.max(0, i.presentation.priceUSD - (i.discount || 0)) * i.quantity, 0);
+    lines.push(`Subtotal (s/IVA)   ${rPad(fmt(baseBeforeDiscount), valW)}`);
     if (taxableTotal > 0) {
-      lines.push(`BASE IMPONIBLE:${fmt(taxableTotal).padStart(W - 14)}`);
+      lines.push(`Base Imponible     ${rPad(fmt(taxableTotal), valW)}`);
     }
     if (exemptTotal > 0) {
-      lines.push(`EXENTO:        ${fmt(exemptTotal).padStart(W - 14)}`);
-    }
-    if (tax > 0) {
-      lines.push(`IVA (${ivaPercent}%):   ${fmt(tax).padStart(W - 14)}`);
+      lines.push(`Exento             ${rPad(fmt(exemptTotal), valW)}`);
     }
     if (globalDiscount > 0) {
-      lines.push(`DESCUENTO:    -${fmt(globalDiscount).padStart(W - 15)}`);
+      lines.push(`Descuento         -${rPad(fmt(globalDiscount), valW - 1)}`);
     }
-    lines.push(`TOTAL:         ${fmt(finalSubtotal - globalDiscount).padStart(W - 14)}`);
+    if (tax > 0) {
+      lines.push(`IVA (${ivaPercent}%)          ${rPad(fmt(tax), valW)}`);
+    }
+    lines.push(`TOTAL (c/IVA)     ${rPad(fmt(totalAfterDiscount), valW)}`);
 
+    // ── Payment ──
     if (lastPayment) {
-      lines.push("-".repeat(W));
+      lines.push("=".repeat(W));
       const pLabels: Record<string, string> = {
         efectivo_bs: "Efectivo Bs", efectivo_usd: "Efectivo USD", pago_movil: "Pago Móvil",
         punto_venta: "Punto de Venta", tarjeta_credito: "Tarjeta Crédito",
         transferencia: "Transferencia", divisas: "Divisas", mixto: "Mixto",
       };
       const pl = pLabels[lastPayment.paymentType] || lastPayment.paymentType;
-      lines.push(`Pago: ${pl}`);
+      lines.push(`Forma de pago: ${pl}`);
       if (lastPayment.paymentReference) lines.push(`Ref: ${lastPayment.paymentReference}`);
       if (lastPayment.paymentBank) lines.push(`Banco: ${lastPayment.paymentBank}`);
       if (lastPayment.paymentPhone) lines.push(`Tel: ${lastPayment.paymentPhone}`);
-      if (lastPayment.cardType) lines.push(`Tarjeta: ${lastPayment.cardType === "debito" ? "Débito" : "Crédito"}`);
-      if (lastPayment.divisaType) lines.push(`Divisa: ${lastPayment.divisaType} @ ${lastPayment.divisaRate}`);
+      if (lastPayment.cardType === "debito") lines.push(`Tarjeta: Débito`);
+      else if (lastPayment.cardType === "credito") lines.push(`Tarjeta: Crédito`);
+      if (lastPayment.divisaType) lines.push(`Divisa: ${lastPayment.divisaType}`);
+      if (lastPayment.divisaRate) lines.push(`Tasa: ${lastPayment.divisaRate}`);
+
+      const totalChk = baseTotal + tax;
       if (lastPayment.paymentType === "efectivo_bs" && lastPayment.receivedBS > 0) {
-        lines.push(`Recibido:     ${fmt(lastPayment.receivedBS / exchangeRate)}`);
-        const ch = Math.max(0, lastPayment.receivedBS - (totalUSD + tax) * exchangeRate);
-        if (ch > 0) lines.push(`Cambio:       ${fmt(ch / exchangeRate)}`);
+        const recUSD = lastPayment.receivedBS / exchangeRate;
+        lines.push(`Recibido Bs        ${rPad(fmt(recUSD), valW)}`);
+        const ch = Math.max(0, lastPayment.receivedBS - totalChk * exchangeRate);
+        if (ch > 0) lines.push(`Cambio             ${rPad(fmt(ch / exchangeRate), valW)}`);
       }
       if (lastPayment.paymentType === "efectivo_usd" && lastPayment.receivedUSD > 0) {
-        lines.push(`Recibido:     ${fmt(lastPayment.receivedUSD)}`);
-        const ch = Math.max(0, lastPayment.receivedUSD - (totalUSD + tax));
-        if (ch > 0) lines.push(`Cambio:       ${fmt(ch)}`);
+        lines.push(`Recibido USD       ${rPad(fmt(lastPayment.receivedUSD), valW)}`);
+        const ch = Math.max(0, lastPayment.receivedUSD - totalChk);
+        if (ch > 0) lines.push(`Cambio             ${rPad(fmt(ch), valW)}`);
       }
     }
 
+    // ── Footer ──
     if (invoiceNumber) {
       lines.push("-".repeat(W));
       lines.push(center("AUTORIZADO POR SENIAT"));
     }
-    lines.push("-".repeat(W));
-    lines.push(new Date().toLocaleString());
     lines.push("=".repeat(W));
     lines.push(center("¡Gracias por su compra!"));
+    lines.push("");
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     printWindow.document.write(`
-      <html><head><title>Ticket</title>
+      <html><head><title>${invoiceNumber ? `Factura ${invoiceNumber}` : "Ticket"}</title>
       <style>
         body { font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 16px; width: 80mm; }
         pre { margin: 0; }
+        td { padding: 0; }
         @media print { @page { margin: 0; } body { margin: 0; padding: 8px; } }
       </style></head><body><pre>${lines.join("\n")}</pre>
       <script>window.onload=()=>{window.print();window.close()}</script></body></html>
