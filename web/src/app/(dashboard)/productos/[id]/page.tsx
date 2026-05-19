@@ -427,13 +427,13 @@ function ProductEditPage() {
                       <PriceInput
                         label={p.exento ? "Precio USD (Exento)" : `Precio Final (IVA ${ivaPercent}% incluido)`}
                         currency="USD"
-                        value={p.priceUSD || ""}
+                        value={p.priceUSD ? Number(p.priceUSD.toFixed(2)) : ""}
                         onChange={(e) => updatePresentation(p.id, "priceUSD", Number(e.target.value))}
                       />
                       <PriceInput
                         label="Precio Bs"
                         currency="BS"
-                        value={p.priceBs || ""}
+                        value={p.priceBs ? Number(p.priceBs.toFixed(2)) : ""}
                         onChange={(e) => updatePresentation(p.id, "priceBs", Number(e.target.value))}
                       />
                       <div className="col-span-2 flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2">
@@ -452,8 +452,9 @@ function ProductEditPage() {
                         <label className="text-xs font-medium text-muted-foreground">Precio COP</label>
                         <input
                           type="number"
+                          step="0.01"
                           min="0"
-                          value={p.priceCop || ""}
+                          value={p.priceCop ? Number(p.priceCop.toFixed(2)) : ""}
                           onChange={(e) => updatePresentation(p.id, "priceCop", Number(e.target.value))}
                           className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                           placeholder="$ cop"
@@ -482,19 +483,19 @@ function ProductEditPage() {
                       <PriceInput
                         label="Precio Mayor"
                         currency="USD"
-                        value={p.wholesalePrice || ""}
+                        value={p.wholesalePrice ? Number(p.wholesalePrice.toFixed(2)) : ""}
                         onChange={(e) => updatePresentation(p.id, "wholesalePrice", Number(e.target.value))}
                       />
                       <PriceInput
                         label="Precio Premium"
                         currency="USD"
-                        value={p.pricePremium || ""}
+                        value={p.pricePremium ? Number(p.pricePremium.toFixed(2)) : ""}
                         onChange={(e) => updatePresentation(p.id, "pricePremium", Number(e.target.value))}
                       />
                       <PriceInput
                         label="Precio Distribuidor"
                         currency="USD"
-                        value={p.priceDistributor || ""}
+                        value={p.priceDistributor ? Number(p.priceDistributor.toFixed(2)) : ""}
                         onChange={(e) => updatePresentation(p.id, "priceDistributor", Number(e.target.value))}
                       />
                     </div>
